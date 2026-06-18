@@ -32,6 +32,15 @@ export function repoRelays(repo: NostrEvent): string[] {
   return [...new Set(out)];
 }
 
+/** Clone URL(s) advertised by the announcement's `clone` tag(s) (NIP-34). Like `relays`,
+ *  a `clone` tag may hold several urls inline; tolerate multiple tags and dedupe. */
+export function repoClone(repo: NostrEvent): string[] {
+  const out: string[] = [];
+  for (const t of repo.tags)
+    if (t[0] === "clone") out.push(...t.slice(1).filter(Boolean));
+  return [...new Set(out)];
+}
+
 /** Repo coordinate(s) an issue actually BELONGS to vs merely mentions (finding #1).
  *  rule: a root-marked `a` wins; else if any `a`, all of them; else none. */
 export function issueTargets(issue: NostrEvent): {
