@@ -1,10 +1,20 @@
-import { KIND } from "./types";
 import { MAX_TTL_SECONDS } from "./claimFetch";
 import { execFileSync } from "node:child_process";
 import { SimplePool, nip19 } from "nostr-tools";
 import { finalizeEvent, generateSecretKey } from "nostr-tools/pure";
 import { BunkerSigner, parseBunkerInput } from "nostr-tools/nip46";
 import { loadRegistry } from "./registry";
+import {
+  buildClaimEvent,
+  parseTtl,
+  DEFAULT_TTL_SECONDS,
+  type ClaimTemplate,
+  type BuildClaimOpts,
+} from "./claimEvent";
+
+// Re-export so existing importers (`from "./claim"`) keep working.
+export { buildClaimEvent, parseTtl, DEFAULT_TTL_SECONDS };
+export type { ClaimTemplate, BuildClaimOpts };
 
 /**
  * The WRITE half of the claim system: build a claim event that the existing claim
@@ -17,75 +27,6 @@ import { loadRegistry } from "./registry";
  * live rather than in unit tests. This mirrors the resolver/fetch split: the security
  * boundary (a real signature) is applied at the edge, never faked in the core.
  */
-
-/** Default claim TTL when the CLI is given no `--ttl`. Short by design — a claim is a
- *  soft "I'm on this", not a lease; it should lapse quickly if the worker walks away. */
-export const DEFAULT_TTL_SECONDS = 3 * 24 * 60 * 60; // 3 days
-
-/** An unsigned Nostr event template (NIP-01): the four fields a signer fills in around.
- *  Structurally a nostr-tools `EventTemplate`, so `finalizeEvent` / `signEvent` accept it. */
-export interface ClaimTemplate {
-  kind: number;
-  created_at: number;
-  tags: string[][];
-  content: string;
-}
-
-export interface BuildClaimOpts {
-  now: number; // unix seconds; injected so the builder stays pure/deterministic
-  ttlSeconds?: number; // claim lifetime; ignored for a release. default DEFAULT_TTL_SECONDS
-  release?: boolean; // true => status "released" (the fold drops it from active)
-}
-
-/**
- * Build an unsigned claim (kind 31621) over `issueId`. The result is guaranteed
- * admissible: `["d", issueId]` is the authoritative target the registry queries by
- * `#d`; the `["e", issueId, "", "root"]` mirror MUST equal `d` (claimTargetIssueId);
- * the NIP-40 `expiration` is an integer within the 14-day horizon the gate enforces.
- *
- * A release carries the same future expiration as a claim (see below); the fold frees
- * the issue on the `status` tag, not on expiry.
- */
-export function buildClaimEvent(issueId: string, opts: BuildClaimOpts): ClaimTemplate {
-  if (!issueId) throw new Error("issueId is required");
-  const release = opts.release ?? false;
-  const ttl = opts.ttlSeconds ?? DEFAULT_TTL_SECONDS;
-  if (!Number.isInteger(ttl) || ttl <= 0) {
-    throw new Error(`ttlSeconds must be a positive integer (got ${ttl})`);
-  }
-  if (ttl > MAX_TTL_SECONDS) {
-    throw new Error(`ttl ${ttl}s exceeds the ${MAX_TTL_SECONDS}s (14-day) horizon`);
-  }
-  // Both claim and release carry a FUTURE expiration (now + ttl). A release must NOT
-  // expire at/before its own created_at: NIP-40 relays reject already-expired events
-  // ("event is expired"), so `expiration === now` silently fails to publish. The fold
-  // frees the issue on the released *status*, not on expiry; a future expiration also
-  // lets the release outlive the claim it supersedes (created_at is later, so is expiry).
-  const expiry = opts.now + ttl;
-  return {
-    kind: KIND.CLAIM,
-    created_at: opts.now,
-    tags: [
-      ["d", issueId],
-      ["e", issueId, "", "root"],
-      ["expiration", String(expiry)],
-      ["status", release ? "released" : "claimed"],
-    ],
-    content: "",
-  };
-}
-
-const TTL_UNITS: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
-
-/** Parse a human TTL like `3d`, `12h`, `30m`, `45s` into seconds. Unit suffix required;
- *  only positive values. Throws on anything else so the CLI fails loudly, not silently. */
-export function parseTtl(input: string): number {
-  const m = /^(\d+)([smhd])$/.exec(input.trim());
-  if (!m) throw new Error(`bad --ttl "${input}": use a number + unit, e.g. 3d, 12h, 30m, 45s`);
-  const n = Number(m[1]);
-  if (n <= 0) throw new Error(`--ttl must be positive (got "${input}")`);
-  return n * TTL_UNITS[m[2]];
-}
 
 // ---------------------------------------------------------------------------
 // CLI edge: sign (NIP-46 bunker by default, --nsec fallback) + publish.

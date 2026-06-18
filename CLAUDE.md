@@ -145,3 +145,15 @@ harmless.
 4. **Opt-in registry**: start with a curated NIP-51 list of repo coords; later let
    maintainers self-register, with a per-repo "accepts agent contributions" toggle.
 5. **Web UI**: filter by size / language / repo; "claim"; deep-link to clone url.
+   - DONE: the contributor loop — `src/webui.ts` renders a state-aware **Claim/Release**
+     button + per-repo **clone** link. Signing is the visitor's own signer via
+     `window.nostr.js` (NIP-07 or NIP-46/Clave); the server stays READ-ONLY and the
+     browser publishes to the **registry-trusted** relays. The server pre-builds the
+     unsigned claim skeleton with `buildClaimEvent` (single source of truth); the client
+     only stamps time + status, signs, publishes. Hardened by an adversarial review —
+     see `docs/superpowers/specs/2026-06-18-web-claim-button-design.md`. Dogfooded live
+     (claimed PRana's own lifecycle-docs issue via Clave, row flipped to claimed).
+   - KNOWN GAP: per-fetch a repo can be silently dropped if its `30617` discovery query
+     times out (the worklist then shows 1 repo, not 2). Transient, but a real robustness
+     hole — make the fetch resilient (longer wait / retry / don't drop on first empty);
+     related to `a9ca4949`.
