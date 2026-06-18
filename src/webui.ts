@@ -161,7 +161,7 @@ export function renderWorklistHtml(items: MultiRepoItem[], unreachable: Unreacha
 <title>PRana 🐟 — worklist</title>
 <style>
   :root { color-scheme: light dark; }
-  body { font: 15px/1.5 ui-sans-serif, system-ui, sans-serif; margin: 0; padding: 1.5rem; max-width: 960px; }
+  body { font: 15px/1.5 ui-sans-serif, system-ui, sans-serif; margin: 0 auto; padding: 1.5rem; max-width: 1200px; }
   h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
   .sub { opacity: .7; margin: 0 0 1rem; }
   .controls { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }

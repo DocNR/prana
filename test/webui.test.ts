@@ -148,6 +148,14 @@ describe("safeClone", () => {
   });
 });
 
+describe("renderWorklistHtml — wide layout (Task 4)", () => {
+  it("uses a 1200px max-width, not the old 960px", () => {
+    const html = renderWorklistHtml([item()]);
+    expect(html).toMatch(/max-width:\s*1200px/);
+    expect(html).not.toMatch(/max-width:\s*960px/);
+  });
+});
+
 describe("renderWorklistHtml — WNJ signer", () => {
   it("includes the WNJ signer script (pinned + SRI) and the claim handler", () => {
     const html = renderWorklistHtml([item()]);
