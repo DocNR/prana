@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { renderWorklistHtml, escapeHtml, issueLink, claimRelays, safeClone } from "../src/webui";
-import { MultiRepoItem } from "../src/registry";
+import { MultiRepoItem, UnreachableRepo } from "../src/registry";
 import { buildClaimEvent } from "../src/claimEvent";
 
 function item(over: Partial<MultiRepoItem> = {}): MultiRepoItem {
@@ -69,6 +69,37 @@ describe("renderWorklistHtml", () => {
     const html = renderWorklistHtml([item({ repo: "ngit" }), item({ repo: "zebra" })]);
     expect(html).toMatch(/<option value="ngit">ngit<\/option>/);
     expect(html).toMatch(/<option value="zebra">zebra<\/option>/);
+  });
+});
+
+describe("renderWorklistHtml — unreachable repos", () => {
+  const ghost: UnreachableRepo = {
+    ref: { owner: "1".repeat(64), d: "ghost", name: "ghost" },
+    error: "no 30617 for <ghost> on wss://relay.down",
+  };
+
+  it("renders a visible banner naming each repo that couldn't be reached", () => {
+    const html = renderWorklistHtml([item()], [ghost]);
+    expect(html).toMatch(/couldn.?t be reached/i);
+    expect(html).toContain("ghost");
+    expect(html).toContain("wss://relay.down"); // the failure reason is shown
+  });
+
+  it("ESCAPES the untrusted error message (no HTML injection)", () => {
+    const html = renderWorklistHtml([item()], [ghost]);
+    expect(html).toContain("no 30617 for &lt;ghost&gt;");
+    expect(html).not.toContain("no 30617 for <ghost>");
+  });
+
+  it("surfaces unreachable repos even when no issues resolved", () => {
+    const html = renderWorklistHtml([], [ghost]);
+    expect(html).toMatch(/couldn.?t be reached/i);
+    expect(html).toContain("ghost");
+  });
+
+  it("renders no unreachable banner when every repo resolved", () => {
+    const html = renderWorklistHtml([item()]);
+    expect(html).not.toMatch(/couldn.?t be reached/i);
   });
 });
 
