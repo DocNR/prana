@@ -4,10 +4,12 @@ import {
   resolveFromEvents,
   fetchRepo,
   discoverAnnouncement,
+  poolQuery,
   RawEvent,
   Verifier,
   QueryFn,
 } from "../src/fetch";
+import type { SimplePool } from "nostr-tools";
 import { repoRelays, issueTargets } from "../src/nip34";
 import { NostrEvent, KIND } from "../src/types";
 import { OWNER, MAINT, AUTHOR, RANDO, REPO_ADDR, issue, status } from "./fixtures";
@@ -230,5 +232,32 @@ describe("fetchRepo — live path with injected query (no network)", () => {
     const r = await fetchRepo(announcement, { query, verify: fakeVerify });
     expect(calls).toHaveLength(1); // only the issue query ran
     expect(r.resolved).toHaveLength(0);
+  });
+});
+
+describe("poolQuery — shared warm pool (no per-query close)", () => {
+  it("queries the caller's pool with a generous maxWait and never closes it", async () => {
+    const calls: { relays: string[]; params: unknown }[] = [];
+    let closed = false;
+    const fakePool = {
+      querySync: async (relays: string[], _filter: unknown, params: unknown) => {
+        calls.push({ relays, params });
+        return [sign(issue())];
+      },
+      close: () => {
+        closed = true;
+      },
+      destroy: () => {
+        closed = true;
+      },
+    } as unknown as SimplePool;
+
+    const query = poolQuery(fakePool);
+    const res = await query(["wss://relay.one"], { kinds: [KIND.ISSUE] });
+
+    expect(res).toHaveLength(1);
+    expect((calls[0].params as { maxWait?: number }).maxWait).toBe(5000);
+    expect(calls[0].relays).toEqual(["wss://relay.one"]);
+    expect(closed).toBe(false); // the CALLER owns the pool lifecycle, not the query
   });
 });

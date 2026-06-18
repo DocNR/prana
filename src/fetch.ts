@@ -83,7 +83,7 @@ export interface Filter {
 /** Relay query function. Injectable so the live path can be tested with a mock. */
 export type QueryFn = (relays: string[], filter: Filter) => Promise<RawEvent[]>;
 
-const defaultQuery: QueryFn = async (relays, filter) => {
+export const defaultQuery: QueryFn = async (relays, filter) => {
   const pool = new SimplePool();
   try {
     // our Filter is a structural subset of nostr-tools' (which has a `#<tag>`
@@ -94,6 +94,21 @@ const defaultQuery: QueryFn = async (relays, filter) => {
     pool.close(relays);
   }
 };
+
+/**
+ * Build a QueryFn over a caller-owned pool that is REUSED across every query in a
+ * run and closed ONCE by the caller (do NOT close per query). The generous
+ * `maxWait` gives a slow relay time to answer, so a registry run's connect/
+ * disconnect churn can't make a real response land after querySync already
+ * resolved empty — the root cause of a repo being silently dropped from the
+ * worklist (ngit issue 122478d0).
+ */
+export function poolQuery(pool: SimplePool, maxWait = 5000): QueryFn {
+  return async (relays, filter) => {
+    const f = filter as Parameters<typeof pool.querySync>[1];
+    return (await pool.querySync(relays, f, { maxWait })) as RawEvent[];
+  };
+}
 
 /**
  * Pure assembly from already-collected events (recorded ndjson, or a captured
