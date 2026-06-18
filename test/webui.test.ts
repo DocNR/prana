@@ -97,7 +97,9 @@ describe("safeClone", () => {
 describe("renderWorklistHtml — WNJ signer", () => {
   it("includes the WNJ signer script (pinned + SRI) and the claim handler", () => {
     const html = renderWorklistHtml([item()]);
-    expect(html).toMatch(/window\.nostr\.js@\d+\.\d+\.\d+\/dist\/window\.nostr\.min\.js/);
+    // `defer` is REQUIRED: without it the script runs during <head> parse, before
+    // <body> exists, and WNJ's appendChild crashes ("document.body is null").
+    expect(html).toMatch(/<script defer src="https:\/\/cdn\.jsdelivr\.net\/npm\/window\.nostr\.js@\d+\.\d+\.\d+\/dist\/window\.nostr\.min\.js/);
     expect(html).toContain('integrity="sha384-');
     expect(html).toContain("window.nostr.signEvent");
   });
