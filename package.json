@@ -1,0 +1,26 @@
+{
+  "name": "prana",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A cross-project directory of opt-in Nostr (NIP-34) repos that surfaces correctly-open issues by complexity, so contributors can pick items to fix.",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "analyze": "tsx src/analyze.ts",
+    "fetch": "tsx src/fetch.ts",
+    "worklist": "tsx src/worklist.ts",
+    "registry": "tsx src/registry.ts",
+    "serve": "tsx src/server.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "dependencies": {
+    "nostr-tools": "^2.23.5"
+  }
+}

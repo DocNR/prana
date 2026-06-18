@@ -1,0 +1,15 @@
+node_modules/
+*.ndjson
+# but DO track the committed real-event test fixture (whole, signed ngit events)
+!test/fixtures/**/*.ndjson
+dist/
+.DS_Store
+*.log
+
+# bootstrap artifact
+prana.tar.gz
+
+# archives / snapshots
+*.tar.gz
+*.tgz
+*.zip
