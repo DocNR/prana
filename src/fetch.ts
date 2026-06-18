@@ -83,7 +83,7 @@ export interface Filter {
 /** Relay query function. Injectable so the live path can be tested with a mock. */
 export type QueryFn = (relays: string[], filter: Filter) => Promise<RawEvent[]>;
 
-const defaultQuery: QueryFn = async (relays, filter) => {
+export const defaultQuery: QueryFn = async (relays, filter) => {
   const pool = new SimplePool();
   try {
     // our Filter is a structural subset of nostr-tools' (which has a `#<tag>`
@@ -94,6 +94,21 @@ const defaultQuery: QueryFn = async (relays, filter) => {
     pool.close(relays);
   }
 };
+
+/**
+ * Build a QueryFn over a caller-owned pool that is REUSED across every query in a
+ * run and closed ONCE by the caller (do NOT close per query). The generous
+ * `maxWait` gives a slow relay time to answer, so a registry run's connect/
+ * disconnect churn can't make a real response land after querySync already
+ * resolved empty — the root cause of a repo being silently dropped from the
+ * worklist (ngit issue 122478d0).
+ */
+export function poolQuery(pool: SimplePool, maxWait = 5000): QueryFn {
+  return async (relays, filter) => {
+    const f = filter as Parameters<typeof pool.querySync>[1];
+    return (await pool.querySync(relays, f, { maxWait })) as RawEvent[];
+  };
+}
 
 /**
  * Pure assembly from already-collected events (recorded ndjson, or a captured
@@ -152,13 +167,25 @@ export async function discoverAnnouncement(
 ): Promise<NostrEvent> {
   const query = opts.query ?? defaultQuery;
   const verify = opts.verify ?? defaultVerify;
-  const raw = await query(relays, { kinds: [KIND.REPO_ANNOUNCEMENT], authors: [owner], "#d": [d] });
-  // belt-and-suspenders: a relay may ignore the filter, so match client-side too.
-  const matching = raw.filter(
-    (e) => e.pubkey === owner && e.tags.some((t) => t[0] === "d" && t[1] === d),
-  );
-  const verified = verifyAll(matching, verify).valid;
+  const filter: Filter = { kinds: [KIND.REPO_ANNOUNCEMENT], authors: [owner], "#d": [d] };
+
+  // One query attempt -> client-side belt-and-suspenders match -> signature gate.
+  const attempt = async (): Promise<NostrEvent[]> => {
+    const raw = await query(relays, filter);
+    // a relay may ignore the filter, so match client-side too.
+    const matching = raw.filter(
+      (e) => e.pubkey === owner && e.tags.some((t) => t[0] === "d" && t[1] === d),
+    );
+    return verifyAll(matching, verify).valid;
+  };
+
+  // Retry once: under per-run connect/disconnect churn a slow relay's response can
+  // land after the first querySync resolves empty. A bare retry turns that
+  // transient miss into a hit instead of silently dropping the whole repo.
+  let verified = await attempt();
+  if (!verified.length) verified = await attempt();
   if (!verified.length) throw new Error(`no 30617 for ${owner}:${d} on ${relays.join(", ")}`);
+
   // replaceable: newest wins; tie-break by id so the choice is deterministic.
   verified.sort((a, b) => b.created_at - a.created_at || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   return verified[0];

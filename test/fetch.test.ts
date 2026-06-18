@@ -4,10 +4,12 @@ import {
   resolveFromEvents,
   fetchRepo,
   discoverAnnouncement,
+  poolQuery,
   RawEvent,
   Verifier,
   QueryFn,
 } from "../src/fetch";
+import type { SimplePool } from "nostr-tools";
 import { repoRelays, issueTargets } from "../src/nip34";
 import { NostrEvent, KIND } from "../src/types";
 import { OWNER, MAINT, AUTHOR, RANDO, REPO_ADDR, issue, status } from "./fixtures";
@@ -177,6 +179,32 @@ describe("discoverAnnouncement — relay-side author+d filter (live discovery)",
     ).rejects.toThrow(/no 30617/);
   });
 
+  it("retries once on a transient empty result, then succeeds (no silent drop)", async () => {
+    let calls = 0;
+    const query: QueryFn = async () => {
+      calls += 1;
+      return calls === 1 ? [] : [sign(announcement)]; // first miss (transient), second hit
+    };
+    const found = await discoverAnnouncement(OWNER, "my-repo", ["wss://relay.one"], {
+      query,
+      verify: fakeVerify,
+    });
+    expect(found.id).toBe("repo0001");
+    expect(calls).toBe(2); // retried exactly once
+  });
+
+  it("gives up after retrying when both attempts are empty", async () => {
+    let calls = 0;
+    const query: QueryFn = async () => {
+      calls += 1;
+      return [];
+    };
+    await expect(
+      discoverAnnouncement(OWNER, "my-repo", ["wss://relay.one"], { query, verify: fakeVerify }),
+    ).rejects.toThrow(/no 30617/);
+    expect(calls).toBe(2); // tried twice before throwing
+  });
+
   it("returns the newest when relays return stale replaceable copies", async () => {
     // 30617 is addressable/replaceable; a lagging relay may still serve an old
     // copy alongside the fresh one. Newest created_at must win.
@@ -230,5 +258,32 @@ describe("fetchRepo — live path with injected query (no network)", () => {
     const r = await fetchRepo(announcement, { query, verify: fakeVerify });
     expect(calls).toHaveLength(1); // only the issue query ran
     expect(r.resolved).toHaveLength(0);
+  });
+});
+
+describe("poolQuery — shared warm pool (no per-query close)", () => {
+  it("queries the caller's pool with a generous maxWait and never closes it", async () => {
+    const calls: { relays: string[]; params: unknown }[] = [];
+    let closed = false;
+    const fakePool = {
+      querySync: async (relays: string[], _filter: unknown, params: unknown) => {
+        calls.push({ relays, params });
+        return [sign(issue())];
+      },
+      close: () => {
+        closed = true;
+      },
+      destroy: () => {
+        closed = true;
+      },
+    } as unknown as SimplePool;
+
+    const query = poolQuery(fakePool);
+    const res = await query(["wss://relay.one"], { kinds: [KIND.ISSUE] });
+
+    expect(res).toHaveLength(1);
+    expect((calls[0].params as { maxWait?: number }).maxWait).toBe(5000);
+    expect(calls[0].relays).toEqual(["wss://relay.one"]);
+    expect(closed).toBe(false); // the CALLER owns the pool lifecycle, not the query
   });
 });

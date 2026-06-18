@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { ResolvedIssue, KIND } from "./types";
-import { discoverAnnouncement, fetchRepo, RawEvent } from "./fetch";
+import { SimplePool } from "nostr-tools";
+import { discoverAnnouncement, fetchRepo, defaultQuery, poolQuery, QueryFn, Verifier } from "./fetch";
 import { WorklistItem, buildWorklist, gatedClaimLookup, ClaimView } from "./worklist";
 import { ComplexityScorer, heuristicScorer, Complexity } from "./complexity";
 import { buildClaimEvent, ClaimTemplate } from "./claimEvent";
@@ -151,29 +152,51 @@ export async function fetchRepoInput(
   ref: RepoRef,
   fallbackRelays: string[] = [],
   now: number = Math.floor(Date.now() / 1000),
+  opts: { query?: QueryFn; verify?: Verifier } = {},
 ): Promise<RepoInput> {
   const relays = ref.relays?.length ? ref.relays : fallbackRelays;
   if (!relays.length) {
     throw new Error(`no relays for ${repoRefCoord(ref)}: add "relays" to the registry entry`);
   }
-  const announcement = await discoverAnnouncement(ref.owner, ref.d, relays);
-  const resolved = (await fetchRepo(announcement, { relays })).resolved;
+  // One shared query (and verifier) for THIS repo's discover + issues + claims, so a
+  // warm pool from the caller is reused instead of churning a fresh socket per query.
+  const query = opts.query ?? defaultQuery;
+  const verify = opts.verify;
+  const announcement = await discoverAnnouncement(ref.owner, ref.d, relays, { query, verify });
+  const resolved = (await fetchRepo(announcement, { relays, query, verify })).resolved;
 
   const openIds = resolved.filter((r) => r.state === "open").map((r) => r.issue.id);
   let claimFor: ((issueId: string) => ClaimView | undefined) | undefined;
   if (openIds.length) {
-    const { SimplePool } = await import("nostr-tools");
-    const pool = new SimplePool();
-    try {
-      const raw = (await pool.querySync(relays, { kinds: [KIND.CLAIM], "#d": openIds })) as RawEvent[];
-      claimFor = gatedClaimLookup(raw, openIds, now);
-    } finally {
-      pool.close(relays);
-    }
+    const raw = await query(relays, { kinds: [KIND.CLAIM], "#d": openIds });
+    claimFor = gatedClaimLookup(raw, openIds, now, verify ? { verify } : undefined);
   }
   const cloneList = repoClone(announcement);
   const cloneUrl = cloneList.find((u) => u.startsWith("https://")) ?? cloneList[0] ?? null;
   return { ref, resolved, claimFor, relays, cloneUrl };
+}
+
+/**
+ * Fetch every registry ref through ONE shared query — i.e. one warm SimplePool per
+ * run, supplied by the caller — instead of churning a fresh pool per query. A ref
+ * that errors is reported and SKIPPED, not fatal, so the directory still renders the
+ * repos that resolved. The caller owns the pool lifecycle (close/destroy it once).
+ */
+export async function fetchRegistryInputs(
+  refs: RepoRef[],
+  fallbackRelays: string[],
+  query: QueryFn,
+  verify?: Verifier,
+): Promise<RepoInput[]> {
+  const inputs: RepoInput[] = [];
+  for (const ref of refs) {
+    try {
+      inputs.push(await fetchRepoInput(ref, fallbackRelays, undefined, { query, verify }));
+    } catch (e) {
+      console.error(`! skipped ${repoRefCoord(ref)}: ${e instanceof Error ? e.message : e}`);
+    }
+  }
+  return inputs;
 }
 
 // ---------------------------------------------------------------------------
@@ -187,15 +210,13 @@ async function main(): Promise<void> {
   if (!registryPath) throw new Error("usage: registry <registry.json> [fallbackRelay...]");
 
   const refs = loadRegistry(registryPath);
-  const inputs: RepoInput[] = [];
-  for (const ref of refs) {
-    try {
-      inputs.push(await fetchRepoInput(ref, fallbackRelays));
-    } catch (e) {
-      console.error(`! skipped ${repoRefCoord(ref)}: ${e instanceof Error ? e.message : e}`);
-    }
+  const pool = new SimplePool();
+  try {
+    const inputs = await fetchRegistryInputs(refs, fallbackRelays, poolQuery(pool));
+    console.log(renderMultiRepoWorklist(await buildMultiRepoWorklist(inputs)));
+  } finally {
+    pool.destroy(); // close the warm pool ONCE, at the end of the run
   }
-  console.log(renderMultiRepoWorklist(await buildMultiRepoWorklist(inputs)));
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
