@@ -118,6 +118,27 @@ describe("renderMultiRepoWorklist", () => {
   it("handles an empty registry result", () => {
     expect(renderMultiRepoWorklist([])).toMatch(/no open issues across the registry/);
   });
+
+  it("surfaces an unreachable repo line below the worklist (not silently omitted)", async () => {
+    const items = await buildMultiRepoWorklist([
+      { ref: { owner: OWNER, d: "repoA", name: "alpha" }, resolved: [resolved("a1", "Fix typo", "docs")] },
+    ]);
+    const out = renderMultiRepoWorklist(items, [
+      { ref: { owner: OWNER, d: "ghost", name: "ghost" }, error: "no 30617 for ghost on wss://relay.down" },
+    ]);
+    expect(out).toMatch(/1 repo\(s\) unreachable/);
+    expect(out).toMatch(/ghost/);
+    expect(out).toMatch(/wss:\/\/relay\.down/); // the failure reason is shown
+  });
+
+  it("surfaces unreachable repos even when no issues resolved", () => {
+    const out = renderMultiRepoWorklist([], [
+      { ref: { owner: OWNER, d: "ghost" }, error: "relay timeout" },
+    ]);
+    expect(out).toMatch(/unreachable/);
+    expect(out).toMatch(/ghost/);
+    expect(out).not.toBe("no open issues across the registry.");
+  });
 });
 
 describe("fetchRepoInput — query/verify threading (resilience)", () => {

@@ -115,9 +115,22 @@ export async function buildMultiRepoWorklist(
   return all;
 }
 
-/** Render the merged worklist with a repo column. */
-export function renderMultiRepoWorklist(items: MultiRepoItem[]): string {
-  if (items.length === 0) return "no open issues across the registry.";
+/** The "couldn't reach repo X" footer lines, or [] when every repo resolved. */
+function unreachableLines(unreachable: UnreachableRepo[]): string[] {
+  if (unreachable.length === 0) return [];
+  return [
+    `! ${unreachable.length} repo(s) unreachable (relays down — not omitted):`,
+    ...unreachable.map((u) => `!   ${u.ref.name ?? u.ref.d} — ${u.error}`),
+  ];
+}
+
+/** Render the merged worklist with a repo column, plus any unreachable repos. */
+export function renderMultiRepoWorklist(items: MultiRepoItem[], unreachable: UnreachableRepo[] = []): string {
+  const footer = unreachableLines(unreachable);
+  if (items.length === 0) {
+    const head = "no open issues across the registry.";
+    return footer.length ? [head, "", ...footer].join("\n") : head;
+  }
   const claimLabel = (it: MultiRepoItem): string =>
     isAvailable(it) ? "available" : it.claim!.contended ? "contended" : `claimed:${it.claim!.holder!.slice(0, 8)}`;
 
@@ -147,6 +160,7 @@ export function renderMultiRepoWorklist(items: MultiRepoItem[]): string {
     ...lines,
     "",
     `${items.length} open across ${repos} repo(s)  (${available} available)  S:${counts.S ?? 0} M:${counts.M ?? 0} L:${counts.L ?? 0}`,
+    ...(footer.length ? ["", ...footer] : []),
   ].join("\n");
 }
 
@@ -226,8 +240,8 @@ async function main(): Promise<void> {
   const refs = loadRegistry(registryPath);
   const pool = new SimplePool();
   try {
-    const { inputs } = await fetchRegistryInputs(refs, fallbackRelays, poolQuery(pool));
-    console.log(renderMultiRepoWorklist(await buildMultiRepoWorklist(inputs)));
+    const { inputs, unreachable } = await fetchRegistryInputs(refs, fallbackRelays, poolQuery(pool));
+    console.log(renderMultiRepoWorklist(await buildMultiRepoWorklist(inputs), unreachable));
   } finally {
     pool.destroy(); // close the warm pool ONCE, at the end of the run
   }
