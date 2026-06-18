@@ -188,7 +188,7 @@ describe("fetchRegistryInputs — one shared query, no dropped repo (issue 12247
       return []; // no issues/statuses/claims for either repo
     };
 
-    const inputs = await fetchRegistryInputs(
+    const { inputs, unreachable } = await fetchRegistryInputs(
       [{ owner: OWNER, d: "a" }, { owner: OWNER_B, d: "b" }],
       ["wss://relay.one"],
       query,
@@ -198,7 +198,43 @@ describe("fetchRegistryInputs — one shared query, no dropped repo (issue 12247
     // The bug: a transient miss dropped a repo, so the worklist showed "1 repo(s)".
     // The fix: BOTH repos resolve -> "2 repo(s)".
     expect(inputs.map((i) => i.ref.d).sort()).toEqual(["a", "b"]);
+    expect(unreachable).toEqual([]); // neither repo was genuinely unreachable
     expect(aDiscover).toBe(2); // repo A's transient miss was retried, not skipped
+  });
+});
+
+describe("fetchRegistryInputs — a genuinely unreachable repo surfaces, not silently dropped", () => {
+  const OWNER_B = "b".repeat(64);
+  const annB: NostrEvent = {
+    id: "annB",
+    pubkey: OWNER_B,
+    created_at: 2,
+    kind: KIND.REPO_ANNOUNCEMENT,
+    tags: [["d", "b"], ["relays", "wss://relay.one"]],
+    content: "",
+  };
+  const acceptAll: Verifier = () => true;
+
+  it("returns the reachable repo as an input and the unreachable one as a {ref, error} marker", async () => {
+    // repo A: its announcement query is ALWAYS empty (relay down) -> discoverAnnouncement
+    //   throws after its one retry. repo B: resolves immediately.
+    const query: QueryFn = async (_relays, filter) => {
+      if (filter.kinds?.includes(KIND.REPO_ANNOUNCEMENT) && filter["#d"]?.includes("b")) return [annB];
+      return []; // repo A discovery always empty; all issue/status/claim queries empty
+    };
+
+    const { inputs, unreachable } = await fetchRegistryInputs(
+      [{ owner: OWNER, d: "a", name: "alpha" }, { owner: OWNER_B, d: "b" }],
+      ["wss://relay.one"],
+      query,
+      acceptAll,
+    );
+
+    expect(inputs.map((i) => i.ref.d)).toEqual(["b"]); // only B resolved
+    expect(unreachable).toHaveLength(1);
+    expect(unreachable[0].ref.d).toBe("a"); // A is surfaced, NOT silently dropped
+    expect(unreachable[0].ref.name).toBe("alpha");
+    expect(unreachable[0].error).toMatch(/no 30617/); // carries the failure reason
   });
 });
 

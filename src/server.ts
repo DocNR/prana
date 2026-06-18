@@ -23,7 +23,7 @@ async function buildHtml(): Promise<string> {
   const refs = loadRegistry(registryPath);
   const pool = new SimplePool();
   try {
-    const inputs = await fetchRegistryInputs(refs, fallbackRelays, poolQuery(pool));
+    const { inputs } = await fetchRegistryInputs(refs, fallbackRelays, poolQuery(pool));
     return renderWorklistHtml(await buildMultiRepoWorklist(inputs));
   } finally {
     pool.destroy(); // one warm pool per build; close it once
