@@ -45,6 +45,15 @@ const LARGE_HINTS = [
   "protocol", "backwards", "concurren", "race condition",
 ];
 
+/** Keyword test that ignores matches embedded in a path/filename: "docs" inside
+ *  "docs/contextvm-fit.md" is a doc *reference*, not a signal that the task is small.
+ *  (Surfaced by dogfooding PRana on itself — a doc link was dragging an L-sized issue
+ *  down to M by firing a bogus small-task hint.) */
+function mentions(hay: string, kw: string): boolean {
+  const k = kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<!/)${k}(?!/)`, "i").test(hay);
+}
+
 export function heuristicScore(issue: NostrEvent): ComplexitySignal {
   const { subject, body } = issueText(issue);
   const hay = `${subject}\n${body}`.toLowerCase();
@@ -79,9 +88,10 @@ export function heuristicScore(issue: NostrEvent): ComplexitySignal {
     reasons.push(`${codeBlocks} code blocks`);
   }
 
-  // keyword signals
-  const small = SMALL_HINTS.filter((k) => hay.includes(k));
-  const large = LARGE_HINTS.filter((k) => hay.includes(k));
+  // keyword signals (path-aware: a keyword inside a path/filename is a reference,
+  // not a signal — e.g. "docs" in "docs/contextvm-fit.md" must not read as a small task)
+  const small = SMALL_HINTS.filter((k) => mentions(hay, k));
+  const large = LARGE_HINTS.filter((k) => mentions(hay, k));
   if (small.length) {
     score -= 2;
     reasons.push(`small-task hints: ${small.join(", ")}`);
