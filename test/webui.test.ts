@@ -168,6 +168,22 @@ describe("gitworkshop URL builders", () => {
     expect(gitworkshopIssueUrl(null, "ac257db69935afa151ba8f194ec3f73845b5432e4d6b9ad18a23d38d2603ffcf", ["wss://relay.one"])).toBeNull();
     expect(gitworkshopIssueUrl("https://gitworkshop.dev/x/y/z", "not-hex", ["wss://relay.one"])).toBeNull();
   });
+
+  it("ADVERSARIAL: rejects a wrong-length hex owner (no dead npub link)", () => {
+    expect(gitworkshopRepoUrl("aa", "prana", ["wss://relay.ngit.dev"])).toBeNull();
+    expect(gitworkshopRepoUrl("ab".repeat(33), "prana", ["wss://relay.ngit.dev"])).toBeNull();
+  });
+
+  it("ADVERSARIAL: rejects a non-wss repo relay (consistency with claimRelays)", () => {
+    const OWNER2 = "3129509e23d3a6125e1451a5912dbe01099e151726c4766b44e1ecb8c846f506";
+    expect(gitworkshopRepoUrl(OWNER2, "prana", ["https://relay.ngit.dev"])).toBeNull();
+    expect(gitworkshopRepoUrl(OWNER2, "prana", ["http://relay.ngit.dev"])).toBeNull();
+  });
+
+  it("issue URL builds with no relay hint when the relay isn't wss (relay-less nevent)", () => {
+    const u = gitworkshopIssueUrl("https://gitworkshop.dev/x/y/z", "ac257db69935afa151ba8f194ec3f73845b5432e4d6b9ad18a23d38d2603ffcf", ["http://nope"]);
+    expect(u).toMatch(/\/issues\/nevent1[0-9a-z]+$/);
+  });
 });
 
 describe("renderWorklistHtml — claim controls", () => {

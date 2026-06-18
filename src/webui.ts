@@ -62,10 +62,14 @@ const GITWORKSHOP = "https://gitworkshop.dev";
  *  Built only from a bech32 npub + new URL().host + an encoded d — no untrusted
  *  string reaches the URL un-encoded, so the result is always a gitworkshop https URL. */
 export function gitworkshopRepoUrl(owner: string, d: string, relays: string[]): string | null {
+  if (!/^[0-9a-f]{64}$/i.test(owner)) return null; // a wrong-length pubkey still npub-encodes → reject it, no dead link
   if (!relays.length) return null;
   let host: string;
-  try { host = new URL(relays[0]).host; } catch { return null; }
-  if (!host) return null; // e.g. a `javascript:` "relay" parses but has no host
+  try {
+    const u = new URL(relays[0]);
+    if (u.protocol !== "wss:") return null; // enforce wss: (consistent with claimRelays); blocks http:/javascript:/etc.
+    host = u.host;
+  } catch { return null; }
   let npub: string;
   try { npub = nip19.npubEncode(owner); } catch { return null; }
   return `${GITWORKSHOP}/${npub}/${host}/${encodeURIComponent(d)}`;
@@ -75,8 +79,12 @@ export function gitworkshopRepoUrl(owner: string, d: string, relays: string[]): 
  *  nevent carries the issue's first relay hint (matches gitworkshop's own encoding). */
 export function gitworkshopIssueUrl(repoUrl: string | null, issueId: string, relays: string[]): string | null {
   if (!repoUrl) return null;
+  // only put a wss: relay hint into the nevent (matches claimRelays / gitworkshop's own encoding)
+  const hint = relays.slice(0, 1).filter((r) => {
+    try { return new URL(r).protocol === "wss:"; } catch { return false; }
+  });
   let nevent: string;
-  try { nevent = nip19.neventEncode({ id: issueId, relays: relays.slice(0, 1) }); } catch { return null; }
+  try { nevent = nip19.neventEncode({ id: issueId, relays: hint }); } catch { return null; }
   return `${repoUrl}/issues/${nevent}`;
 }
 
