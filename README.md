@@ -92,6 +92,32 @@ available / `claimed:<pubkey>` / `contended`. Items sort available-first, then S
 so quick wins surface. `live` discovery uses the relay-side author+`d` filter
 (`discoverAnnouncement`), so older announcements aren't missed behind a relay's cap.
 
+## Claim — publish a claim
+
+`src/claim.ts` is the **write** half of the claim system: the worklist *reads* claims;
+this *mints* one. `buildClaimEvent` is a pure builder for an unsigned kind-31621 event
+the fold and gate accept (`["d", issueId]` target, matching `e`-root, NIP-40
+`expiration` inside the 14-day horizon); signing and publishing are the thin edge.
+
+```bash
+# claim an issue for ~3 days (signs through your ngit login if you have one)
+npm run claim -- <issueId> --ttl 3d
+
+# release it again (frees the issue)
+npm run claim -- <issueId> --release
+```
+
+Signing is **NIP-46 bunker** — the key never leaves your signer (e.g. Clave). With no
+signer flag it reuses your **ngit login** (`nostr.bunker-uri` + `nostr.bunker-app-key`
+in git config), so if you're already logged in it just works, no re-pairing. Otherwise
+pass `--bunker 'bunker://…'` for a fresh pairing, or `--nsec <nsec>` to sign locally
+(tests/CI; never logged). TTL accepts `3d` / `12h` / `30m` / `45s` and errors above the
+14-day horizon — including a release, whose expiration must sit in the future or NIP-40
+relays reject it as already expired. Publish relays come from `--relay` flags, else the
+registry `prana` entry, else sensible defaults. The command prints the published event
+id; re-run `npm run worklist` (or `npm run registry`) to watch the row flip between
+`available` and `claimed:<pubkey>`.
+
 ## Registry — the cross-project directory
 
 `src/registry.ts` spans the worklist across **many** repos — what makes PRana a

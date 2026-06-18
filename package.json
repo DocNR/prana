@@ -12,6 +12,7 @@
     "fetch": "tsx src/fetch.ts",
     "worklist": "tsx src/worklist.ts",
     "registry": "tsx src/registry.ts",
+    "claim": "tsx src/claim.ts",
     "serve": "tsx src/server.ts"
   },
   "devDependencies": {

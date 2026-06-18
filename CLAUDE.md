@@ -132,6 +132,15 @@ harmless.
    **CVM-aware** so claim/release/status can later ride MCP-over-Nostr — see
    `docs/contextvm-fit.md` (adopt-ready; sequence the CVM front door behind the
    claim fold, don't gate on whether the NIP is merged).
+   - DONE: the READ side — claim fold (`src/claimResolver.ts`) + ingest gate
+     (`src/claimFetch.ts`, `isAdmissibleClaim`), both tested.
+   - DONE: the WRITE side — `src/claim.ts` (`npm run claim`): pure `buildClaimEvent`
+     (unit-tested to pass the fold + gate) plus a thin signing/publish edge — NIP-46
+     bunker signing that reuses the **ngit login** (`nostr.bunker-uri` +
+     `nostr.bunker-app-key`) when present, explicit `--bunker`, or `--nsec` local
+     fallback; `SimplePool` publish. NOTE: a release needs a FUTURE `expiration` (now +
+     ttl), not `now` — NIP-40 relays drop already-expired events. Exercised live by
+     claiming/releasing PRana's own issue #1. The CVM front door is still pending.
 3. **Complexity inference**: triage pass over issue text + linked diff size -> S/M/L.
 4. **Opt-in registry**: start with a curated NIP-51 list of repo coords; later let
    maintainers self-register, with a per-repo "accepts agent contributions" toggle.
