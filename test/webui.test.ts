@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderWorklistHtml, escapeHtml, issueLink, claimRelays, safeClone } from "../src/webui";
+import { renderWorklistHtml, escapeHtml, issueLink, claimRelays, safeClone, gitworkshopRepoUrl, gitworkshopIssueUrl } from "../src/webui";
 import { MultiRepoItem, UnreachableRepo } from "../src/registry";
 import { buildClaimEvent } from "../src/claimEvent";
 
@@ -135,6 +135,38 @@ describe("renderWorklistHtml — WNJ signer", () => {
     expect(html).toMatch(/<script defer src="https:\/\/cdn\.jsdelivr\.net\/npm\/window\.nostr\.js@\d+\.\d+\.\d+\/dist\/window\.nostr\.min\.js/);
     expect(html).toContain('integrity="sha384-');
     expect(html).toContain("window.nostr.signEvent");
+  });
+});
+
+describe("gitworkshop URL builders", () => {
+  const OWNER = "3129509e23d3a6125e1451a5912dbe01099e151726c4766b44e1ecb8c846f506";
+  const NPUB = "npub1xy54p83r6wnpyhs52xjeztd7qyyeu9ghymz8v66yu8kt3jzx75rqhf3urc";
+
+  it("builds the exact verified prana repo + issue URLs", () => {
+    const repo = gitworkshopRepoUrl(OWNER, "prana", ["wss://relay.ngit.dev"]);
+    expect(repo).toBe(`https://gitworkshop.dev/${NPUB}/relay.ngit.dev/prana`);
+    const issue = gitworkshopIssueUrl(repo, "ac257db69935afa151ba8f194ec3f73845b5432e4d6b9ad18a23d38d2603ffcf", ["wss://relay.ngit.dev"]);
+    expect(issue).toBe(`https://gitworkshop.dev/${NPUB}/relay.ngit.dev/prana/issues/nevent1qy28wumn8ghj7un9d3shjtnwva5hgtnyv4mqqg9vy47mdxf447s4rw50r98v8aecgk65xtjddwddrz3r6wxjvqlleuca4xlq`);
+  });
+
+  it("ADVERSARIAL: returns null on a non-hex owner, empty relays, or hostile relay", () => {
+    expect(gitworkshopRepoUrl("not-hex", "prana", ["wss://relay.one"])).toBeNull();
+    expect(gitworkshopRepoUrl(OWNER, "prana", [])).toBeNull();
+    expect(gitworkshopRepoUrl(OWNER, "prana", ["javascript:alert(1)"])).toBeNull(); // host === ""
+    expect(gitworkshopRepoUrl(OWNER, "prana", ["not a url"])).toBeNull(); // new URL throws
+  });
+
+  it("ADVERSARIAL: a hostile d is percent-encoded and never breaks the URL", () => {
+    const url = gitworkshopRepoUrl(OWNER, 'a/../b"<x>', ["wss://relay.one"])!;
+    expect(url.startsWith("https://gitworkshop.dev/")).toBe(true);
+    expect(url).not.toContain('"');
+    expect(url).not.toContain("<");
+    expect(url.endsWith("/a%2F..%2Fb%22%3Cx%3E")).toBe(true);
+  });
+
+  it("ADVERSARIAL: issue URL is null for a null repo or a non-hex id", () => {
+    expect(gitworkshopIssueUrl(null, "ac257db69935afa151ba8f194ec3f73845b5432e4d6b9ad18a23d38d2603ffcf", ["wss://relay.one"])).toBeNull();
+    expect(gitworkshopIssueUrl("https://gitworkshop.dev/x/y/z", "not-hex", ["wss://relay.one"])).toBeNull();
   });
 });
 

@@ -55,6 +55,31 @@ export function issueLink(issueId: string): string | null {
   }
 }
 
+const GITWORKSHOP = "https://gitworkshop.dev";
+
+/** gitworkshop.dev repo page, or null if it can't be built safely.
+ *  Format (verified live): https://gitworkshop.dev/<npub>/<relay-host>/<d>.
+ *  Built only from a bech32 npub + new URL().host + an encoded d — no untrusted
+ *  string reaches the URL un-encoded, so the result is always a gitworkshop https URL. */
+export function gitworkshopRepoUrl(owner: string, d: string, relays: string[]): string | null {
+  if (!relays.length) return null;
+  let host: string;
+  try { host = new URL(relays[0]).host; } catch { return null; }
+  if (!host) return null; // e.g. a `javascript:` "relay" parses but has no host
+  let npub: string;
+  try { npub = nip19.npubEncode(owner); } catch { return null; }
+  return `${GITWORKSHOP}/${npub}/${host}/${encodeURIComponent(d)}`;
+}
+
+/** gitworkshop.dev issue page, or null. Format: <repoUrl>/issues/<nevent>, where the
+ *  nevent carries the issue's first relay hint (matches gitworkshop's own encoding). */
+export function gitworkshopIssueUrl(repoUrl: string | null, issueId: string, relays: string[]): string | null {
+  if (!repoUrl) return null;
+  let nevent: string;
+  try { nevent = nip19.neventEncode({ id: issueId, relays: relays.slice(0, 1) }); } catch { return null; }
+  return `${repoUrl}/issues/${nevent}`;
+}
+
 const isAvailable = (it: MultiRepoItem): boolean => !it.claim || it.claim.holder === null;
 
 function claimText(it: MultiRepoItem): string {
