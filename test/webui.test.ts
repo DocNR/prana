@@ -94,6 +94,15 @@ describe("safeClone", () => {
   });
 });
 
+describe("renderWorklistHtml — WNJ signer", () => {
+  it("includes the WNJ signer script (pinned + SRI) and the claim handler", () => {
+    const html = renderWorklistHtml([item()]);
+    expect(html).toMatch(/window\.nostr\.js@\d+\.\d+\.\d+\/dist\/window\.nostr\.min\.js/);
+    expect(html).toContain('integrity="sha384-');
+    expect(html).toContain("window.nostr.signEvent");
+  });
+});
+
 describe("renderWorklistHtml — claim controls", () => {
   it("available row with relays gets a Claim button + data-* (skeleton parity with buildClaimEvent)", () => {
     const id = "d".repeat(64);
@@ -114,12 +123,16 @@ describe("renderWorklistHtml — claim controls", () => {
 
   it("no-relays repo renders no claim control", () => {
     const html = renderWorklistHtml([item({ relays: [], claimSkeleton: null })]);
-    expect(html).not.toMatch(/claim-btn/);
+    // The handler script always contains ".claim-btn" as a selector; check the row tbody only.
+    const tbody = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/)?.[1] ?? "";
+    expect(tbody).not.toMatch(/claim-btn/);
   });
 
   it("non-hex id renders no claim control", () => {
     const html = renderWorklistHtml([item({ issueId: "not-hex", claimSkeleton: null })]);
-    expect(html).not.toMatch(/claim-btn/);
+    // The handler script always contains ".claim-btn" as a selector; check the row tbody only.
+    const tbody = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/)?.[1] ?? "";
+    expect(tbody).not.toMatch(/claim-btn/);
   });
 
   it("clone: https → href, nostr → text, javascript → dropped", () => {

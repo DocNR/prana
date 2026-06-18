@@ -1,5 +1,6 @@
 import { nip19 } from "nostr-tools";
 import { MultiRepoItem } from "./registry";
+import { DEFAULT_TTL_SECONDS } from "./claimEvent";
 
 /**
  * Pure HTML rendering for the worklist web UI (roadmap #5). Kept separate from the
@@ -130,7 +131,10 @@ export function renderWorklistHtml(items: MultiRepoItem[]): string {
   .claim.open { color: #2e7d32; } .claim.taken { opacity: .6; }
   .repo { font-variant: small-caps; opacity: .85; } .id { font-family: ui-monospace, monospace; opacity: .6; }
   .subject a { color: inherit; } .empty { opacity: .6; padding: 1.5rem; text-align: center; }
-</style></head>
+</style>
+<script>window.wnjParams = { position: 'bottom', accent: 'green', startHidden: true, appMetadata: { name: 'PRana' } };</script>
+<script src="https://cdn.jsdelivr.net/npm/window.nostr.js@0.7.1/dist/window.nostr.min.js" integrity="sha384-NXQunbmQGIyNl1fc21WUnd+bnTzHy9PcJxhzI8MeUG6kJsaWL9Ok72zo9RCZOKd7" crossorigin="anonymous"></script>
+</head>
 <body>
   <h1>PRana 🐟 — worklist</h1>
   <p class="sub">${items.length} open across ${repos.length} repo(s) · ${available} available · S:${counts.S ?? 0} M:${counts.M ?? 0} L:${counts.L ?? 0}</p>
@@ -165,6 +169,71 @@ ${body}
   }));
   document.getElementById("repo").addEventListener("change", (e) => { state.repo = e.target.value; apply(); });
   document.getElementById("avail").addEventListener("change", (e) => { state.avail = e.target.checked; apply(); });
+  const TTL = ${DEFAULT_TTL_SECONDS};
+  let pubkey = null;
+  function revealReleases() {
+    if (!pubkey) return;
+    for (const tr of document.querySelectorAll("#rows tr[data-holder]")) {
+      if (tr.dataset.holder && tr.dataset.holder.toLowerCase() === pubkey) {
+        const b = tr.querySelector(".claim-btn");
+        if (b) { b.textContent = "Release"; b.dataset.action = "release"; b.hidden = false; }
+      }
+    }
+  }
+  async function ensurePubkey() {
+    if (pubkey) return pubkey;
+    if (!window.nostr) throw new Error("no signer available");
+    pubkey = (await window.nostr.getPublicKey()).toLowerCase();
+    revealReleases();
+    return pubkey;
+  }
+  function publish(relays, event) {
+    return new Promise((resolve) => {
+      let pending = relays.length, ok = false;
+      if (!pending) return resolve(false);
+      for (const url of relays) {
+        let ws; try { ws = new WebSocket(url); } catch (e) { if (--pending === 0) resolve(ok); continue; }
+        const done = () => { try { ws.close(); } catch (e) {} if (--pending === 0) resolve(ok); };
+        const timer = setTimeout(done, 5000);
+        ws.onopen = () => ws.send(JSON.stringify(["EVENT", event]));
+        ws.onmessage = (m) => { try { const d = JSON.parse(m.data);
+          if (d[0] === "OK" && d[1] === event.id) { if (d[2] === true) ok = true; clearTimeout(timer); done(); } } catch (e) {} };
+        ws.onerror = () => { clearTimeout(timer); done(); };
+      }
+    });
+  }
+  async function act(btn) {
+    const tr = btn.closest("tr");
+    const relays = (tr.dataset.relays || "").split(",").filter(Boolean);
+    if (!relays.length || !tr.dataset.skeleton) return;
+    const action = btn.dataset.action || "claim";
+    const orig = btn.textContent; btn.disabled = true; btn.textContent = "signing…";
+    try {
+      const pk = await ensurePubkey();
+      const sk = JSON.parse(tr.dataset.skeleton);
+      const now = Math.floor(Date.now() / 1000);
+      const tags = sk.tags.filter((t) => t[0] !== "expiration" && t[0] !== "status")
+        .concat([["expiration", String(now + TTL)], ["status", action === "release" ? "released" : "claimed"]]);
+      const signed = await window.nostr.signEvent({ kind: sk.kind, created_at: now, tags, content: "" });
+      btn.textContent = "publishing…";
+      if (!(await publish(relays, signed))) throw new Error("no relay accepted");
+      const cell = tr.querySelector(".claim");
+      if (action === "release") {
+        tr.dataset.holder = ""; tr.dataset.avail = "true";
+        if (cell) { cell.textContent = "available"; cell.className = "claim open"; }
+        btn.textContent = "Claim"; btn.dataset.action = "claim";
+      } else {
+        tr.dataset.holder = pk; tr.dataset.avail = "false";
+        if (cell) { cell.textContent = "claimed \xB7 " + pk.slice(0, 8); cell.className = "claim taken"; }
+        btn.textContent = "Release"; btn.dataset.action = "release";
+      }
+      btn.disabled = false;
+    } catch (e) {
+      btn.textContent = orig; btn.disabled = false;
+      alert("Failed: " + (e && e.message ? e.message : e));
+    }
+  }
+  document.querySelectorAll(".claim-btn").forEach((b) => b.addEventListener("click", () => act(b)));
 </script>
 </body></html>`;
 }
