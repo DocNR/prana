@@ -74,6 +74,8 @@ export interface UnreachableRepo {
 /** A worklist row tagged with the repo it came from. */
 export type MultiRepoItem = WorklistItem & {
   repo: string;
+  owner: string; // 30617 announcement author pubkey (for gitworkshop npub link)
+  d: string; // repo identifier
   relays: string[];
   cloneUrl: string | null;
   claimSkeleton: ClaimTemplate | null; // null when not claimable (no relays / non-hex id)
@@ -101,7 +103,7 @@ export async function buildMultiRepoWorklist(
     for (const it of items) {
       const claimSkeleton =
         relays.length && HEX64.test(it.issueId) ? buildClaimEvent(it.issueId, { now: 0 }) : null;
-      all.push({ ...it, repo: label, relays, cloneUrl, claimSkeleton });
+      all.push({ ...it, repo: label, owner: r.ref.owner, d: r.ref.d, relays, cloneUrl, claimSkeleton });
     }
   }
   all.sort((a, b) => {

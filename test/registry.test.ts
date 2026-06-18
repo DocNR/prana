@@ -277,4 +277,18 @@ describe("buildMultiRepoWorklist — relays/cloneUrl/claimSkeleton threading", (
     expect(items[0].claimSkeleton?.tags).toContainEqual(["d", id]);
     expect(items[0].claimSkeleton?.tags).toContainEqual(["e", id, "", "root"]);
   });
+
+  it("carries the repo owner + d coordinate onto each item (for gitworkshop links)", async () => {
+    const input: RepoInput = {
+      ref: { owner: "1".repeat(64), d: "demo", name: "demo" },
+      relays: ["wss://relay.one"],
+      resolved: [{
+        issue: { id: "a".repeat(64), pubkey: "2".repeat(64), created_at: 1, kind: 1621, tags: [["subject", "x"]], content: "" },
+        state: "open", decidedBy: null, ambiguousTimestamp: false, forkSignal: null,
+      }],
+    };
+    const items = await buildMultiRepoWorklist([input]);
+    expect(items[0].owner).toBe("1".repeat(64));
+    expect(items[0].d).toBe("demo");
+  });
 });

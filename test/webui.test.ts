@@ -14,6 +14,8 @@ function item(over: Partial<MultiRepoItem> = {}): MultiRepoItem {
     reasons: [],
     claim: null,
     repo: "ngit",
+    owner: "1".repeat(64),
+    d: "ngit",
     relays: ["wss://relay.one"], cloneUrl: "https://x.example/r.git",
     claimSkeleton: { kind: 31621, created_at: 0,
       tags: [["d", issueId], ["e", issueId, "", "root"], ["expiration", "259200"], ["status", "claimed"]],
