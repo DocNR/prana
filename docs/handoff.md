@@ -1,7 +1,21 @@
 # Handoff — fetch layer live verification
-_Last updated: 2026-06-18 ~09:30 EST_
+_Last updated: 2026-06-18 (later) — fetch resilience + unreachable-repo row_
 
-## This session (2026-06-18) — tooling only, no prana code changed
+## This session (2026-06-18, later) — fetch resilience landed; worklist no longer drops repos
+- **Transient drop fixed** (merge `28a466a`, ngit issue `122478d0`): one warm `SimplePool`
+  reused per registry run (`poolQuery`), a generous `maxWait`, and a one-shot retry in
+  `discoverAnnouncement` — a slow relay's late answer no longer makes a repo vanish.
+- **Genuinely-unreachable repo surfaced** (branch `feat/unreachable-repo-row`):
+  `fetchRegistryInputs` now returns `{ inputs, unreachable }`; a persistently-failing ref
+  becomes an `UnreachableRepo {ref, error}` marker instead of being silently dropped.
+  `renderMultiRepoWorklist` prints a `! N repo(s) unreachable` footer; `renderWorklistHtml`
+  renders a `role="alert"` banner above the table (label + error escaped).
+  `buildMultiRepoWorklist`, the folds, and `buildClaimEvent` are unchanged.
+- Base is now **144 passing** (`npm run typecheck && npm test`), not the 24 quoted below.
+- Plan + follow-up notes: `docs/superpowers/plans/2026-06-18-fetch-resilience.md`.
+- Still open / unchanged by this work: the live-verification steps and euc Phase 2 below.
+
+## Earlier session (2026-06-18, ~09:30) — tooling only, no prana code changed
 - Created a **global** Claude Code skill for `ngit` at `~/.claude/skills/ngit/`
   (SKILL.md + `references/commands.md`), modeled on the `nak` skill. It's the front
   door for NIP-34 git-over-nostr work and makes the **ngit-vs-nak** boundary explicit

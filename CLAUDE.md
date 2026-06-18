@@ -153,7 +153,12 @@ harmless.
      only stamps time + status, signs, publishes. Hardened by an adversarial review —
      see `docs/superpowers/specs/2026-06-18-web-claim-button-design.md`. Dogfooded live
      (claimed PRana's own lifecycle-docs issue via Clave, row flipped to claimed).
-   - KNOWN GAP: per-fetch a repo can be silently dropped if its `30617` discovery query
-     times out (the worklist then shows 1 repo, not 2). Transient, but a real robustness
-     hole — make the fetch resilient (longer wait / retry / don't drop on first empty);
-     related to `a9ca4949`.
+   - DONE (was KNOWN GAP): a repo no longer silently disappears from the worklist when
+     its `30617` discovery query fails. Two fixes: (a) TRANSIENT misses — one warm
+     `SimplePool` reused per run (`poolQuery`), a generous `maxWait`, and a one-shot
+     retry in `discoverAnnouncement` (commit `28a466a`, ngit issue `122478d0`); (b)
+     GENUINELY unreachable repos — `fetchRegistryInputs` returns `{ inputs, unreachable }`,
+     a failed ref becomes an `UnreachableRepo {ref, error}` marker, and both renderers
+     surface it: `renderMultiRepoWorklist` prints a `! N repo(s) unreachable` footer,
+     `renderWorklistHtml` a `role="alert"` banner above the table (label + error escaped).
+     Plan + follow-up: `docs/superpowers/plans/2026-06-18-fetch-resilience.md`.

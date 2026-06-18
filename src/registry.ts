@@ -61,6 +61,16 @@ export interface RepoInput {
   cloneUrl?: string | null; // from the 30617 announcement `clone` tag
 }
 
+/**
+ * A registry ref that could NOT be fetched this run (e.g. its 30617 relays were
+ * persistently down). Carried alongside the resolved inputs so the renderers can
+ * surface a visible "couldn't reach repo X" row instead of silently omitting it.
+ */
+export interface UnreachableRepo {
+  ref: RepoRef;
+  error: string;
+}
+
 /** A worklist row tagged with the repo it came from. */
 export type MultiRepoItem = WorklistItem & {
   repo: string;
@@ -105,9 +115,22 @@ export async function buildMultiRepoWorklist(
   return all;
 }
 
-/** Render the merged worklist with a repo column. */
-export function renderMultiRepoWorklist(items: MultiRepoItem[]): string {
-  if (items.length === 0) return "no open issues across the registry.";
+/** The "couldn't reach repo X" footer lines, or [] when every repo resolved. */
+function unreachableLines(unreachable: UnreachableRepo[]): string[] {
+  if (unreachable.length === 0) return [];
+  return [
+    `! ${unreachable.length} repo(s) unreachable (relays down — not omitted):`,
+    ...unreachable.map((u) => `!   ${u.ref.name ?? u.ref.d} — ${u.error}`),
+  ];
+}
+
+/** Render the merged worklist with a repo column, plus any unreachable repos. */
+export function renderMultiRepoWorklist(items: MultiRepoItem[], unreachable: UnreachableRepo[] = []): string {
+  const footer = unreachableLines(unreachable);
+  if (items.length === 0) {
+    const head = "no open issues across the registry.";
+    return footer.length ? [head, "", ...footer].join("\n") : head;
+  }
   const claimLabel = (it: MultiRepoItem): string =>
     isAvailable(it) ? "available" : it.claim!.contended ? "contended" : `claimed:${it.claim!.holder!.slice(0, 8)}`;
 
@@ -137,6 +160,7 @@ export function renderMultiRepoWorklist(items: MultiRepoItem[]): string {
     ...lines,
     "",
     `${items.length} open across ${repos} repo(s)  (${available} available)  S:${counts.S ?? 0} M:${counts.M ?? 0} L:${counts.L ?? 0}`,
+    ...(footer.length ? ["", ...footer] : []),
   ].join("\n");
 }
 
@@ -179,24 +203,28 @@ export async function fetchRepoInput(
 /**
  * Fetch every registry ref through ONE shared query — i.e. one warm SimplePool per
  * run, supplied by the caller — instead of churning a fresh pool per query. A ref
- * that errors is reported and SKIPPED, not fatal, so the directory still renders the
- * repos that resolved. The caller owns the pool lifecycle (close/destroy it once).
+ * that errors is NOT fatal and is NOT silently dropped: it is collected as an
+ * `unreachable` marker (ref + message) so the renderers can show a visible
+ * "couldn't reach repo X" row. The caller owns the pool lifecycle (close it once).
  */
 export async function fetchRegistryInputs(
   refs: RepoRef[],
   fallbackRelays: string[],
   query: QueryFn,
   verify?: Verifier,
-): Promise<RepoInput[]> {
+): Promise<{ inputs: RepoInput[]; unreachable: UnreachableRepo[] }> {
   const inputs: RepoInput[] = [];
+  const unreachable: UnreachableRepo[] = [];
   for (const ref of refs) {
     try {
       inputs.push(await fetchRepoInput(ref, fallbackRelays, undefined, { query, verify }));
     } catch (e) {
-      console.error(`! skipped ${repoRefCoord(ref)}: ${e instanceof Error ? e.message : e}`);
+      const error = e instanceof Error ? e.message : String(e);
+      console.error(`! unreachable ${repoRefCoord(ref)}: ${error}`);
+      unreachable.push({ ref, error });
     }
   }
-  return inputs;
+  return { inputs, unreachable };
 }
 
 // ---------------------------------------------------------------------------
@@ -212,8 +240,8 @@ async function main(): Promise<void> {
   const refs = loadRegistry(registryPath);
   const pool = new SimplePool();
   try {
-    const inputs = await fetchRegistryInputs(refs, fallbackRelays, poolQuery(pool));
-    console.log(renderMultiRepoWorklist(await buildMultiRepoWorklist(inputs)));
+    const { inputs, unreachable } = await fetchRegistryInputs(refs, fallbackRelays, poolQuery(pool));
+    console.log(renderMultiRepoWorklist(await buildMultiRepoWorklist(inputs), unreachable));
   } finally {
     pool.destroy(); // close the warm pool ONCE, at the end of the run
   }

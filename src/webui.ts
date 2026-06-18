@@ -1,5 +1,5 @@
 import { nip19 } from "nostr-tools";
-import { MultiRepoItem } from "./registry";
+import { MultiRepoItem, UnreachableRepo } from "./registry";
 import { DEFAULT_TTL_SECONDS } from "./claimEvent";
 
 /**
@@ -103,7 +103,21 @@ function row(it: MultiRepoItem): string {
   ].join("");
 }
 
-export function renderWorklistHtml(items: MultiRepoItem[]): string {
+/**
+ * A visible banner for repos that couldn't be reached this run (relays persistently
+ * down), so a dropped repo is surfaced instead of silently missing. Returns "" when
+ * every repo resolved. SECURITY: the repo label and error message are interpolated
+ * from registry/relay-side strings — escape both, same as every other cell.
+ */
+function unreachableBanner(unreachable: UnreachableRepo[]): string {
+  if (unreachable.length === 0) return "";
+  const lis = unreachable
+    .map((u) => `<li><span class="repo">${escapeHtml(u.ref.name ?? u.ref.d)}</span> — ${escapeHtml(u.error)}</li>`)
+    .join("");
+  return `<div class="unreachable" role="alert"><strong>${unreachable.length} repo(s) couldn't be reached this run (relays down — not omitted)</strong><ul>${lis}</ul></div>`;
+}
+
+export function renderWorklistHtml(items: MultiRepoItem[], unreachable: UnreachableRepo[] = []): string {
   const repos = [...new Set(items.map((i) => i.repo))].sort();
   const available = items.filter(isAvailable).length;
   const counts = items.reduce<Record<string, number>>((a, i) => ((a[i.complexity] = (a[i.complexity] ?? 0) + 1), a), {});
@@ -131,6 +145,8 @@ export function renderWorklistHtml(items: MultiRepoItem[]): string {
   .claim.open { color: #2e7d32; } .claim.taken { opacity: .6; }
   .repo { font-variant: small-caps; opacity: .85; } .id { font-family: ui-monospace, monospace; opacity: .6; }
   .subject a { color: inherit; } .empty { opacity: .6; padding: 1.5rem; text-align: center; }
+  .unreachable { border: 1px solid #b23b3b; background: #b23b3b1a; border-radius: 6px; padding: .6rem .9rem; margin: 0 0 1rem; }
+  .unreachable strong { color: #b23b3b; } .unreachable ul { margin: .35rem 0 0; padding-left: 1.2rem; } .unreachable li { opacity: .85; }
 </style>
 <script>window.wnjParams = { position: 'bottom', accent: 'green', startHidden: true, appMetadata: { name: 'PRana' } };</script>
 <script defer src="https://cdn.jsdelivr.net/npm/window.nostr.js@0.7.1/dist/window.nostr.min.js" integrity="sha384-NXQunbmQGIyNl1fc21WUnd+bnTzHy9PcJxhzI8MeUG6kJsaWL9Ok72zo9RCZOKd7" crossorigin="anonymous"></script>
@@ -138,6 +154,7 @@ export function renderWorklistHtml(items: MultiRepoItem[]): string {
 <body>
   <h1>PRana 🐟 — worklist</h1>
   <p class="sub">${items.length} open across ${repos.length} repo(s) · ${available} available · S:${counts.S ?? 0} M:${counts.M ?? 0} L:${counts.L ?? 0}</p>
+  ${unreachableBanner(unreachable)}
   <div class="controls">
     <button class="f on" data-cx="">all</button>
     <button class="f" data-cx="S">S</button>
