@@ -177,6 +177,15 @@ describe("renderWorklistHtml — sticky header + live count (Task 6)", () => {
   });
 });
 
+describe("renderWorklistHtml — responsive (Task 7)", () => {
+  it("has a <640px media query and labelled cells for the stacked layout", () => {
+    const html = renderWorklistHtml([item()]);
+    expect(html).toMatch(/@media\s*\(max-width:\s*640px\)/);
+    expect(html).toContain('data-label="repo"');
+    expect(html).toContain('data-label="subject"');
+  });
+});
+
 describe("renderWorklistHtml — WNJ signer", () => {
   it("includes the WNJ signer script (pinned + SRI) and the claim handler", () => {
     const html = renderWorklistHtml([item()]);

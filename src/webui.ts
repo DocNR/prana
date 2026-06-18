@@ -184,6 +184,16 @@ export function renderWorklistHtml(items: MultiRepoItem[], unreachable: Unreacha
   .subject a { color: inherit; } .empty { opacity: .6; padding: 1.5rem; text-align: center; }
   .unreachable { border: 1px solid #b23b3b; background: #b23b3b1a; border-radius: 6px; padding: .6rem .9rem; margin: 0 0 1rem; }
   .unreachable strong { color: #b23b3b; } .unreachable ul { margin: .35rem 0 0; padding-left: 1.2rem; } .unreachable li { opacity: .85; }
+  @media (max-width: 640px) {
+    body { padding: .75rem; }
+    thead { display: none; }
+    table, tbody, tr, td { display: block; width: 100%; }
+    tr { border: 1px solid #8884; border-radius: 8px; margin-bottom: .6rem; padding: .3rem .2rem; }
+    td { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; border: none; padding: .25rem .5rem; }
+    td::before { content: attr(data-label); font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; opacity: .55; }
+    td.subject { flex-direction: column; align-items: flex-start; gap: .1rem; }
+    td:empty { display: none; }
+  }
 </style>
 <script>window.wnjParams = { position: 'bottom', accent: 'green', startHidden: true, appMetadata: { name: 'PRana' } };</script>
 <script defer src="https://cdn.jsdelivr.net/npm/window.nostr.js@0.7.1/dist/window.nostr.min.js" integrity="sha384-NXQunbmQGIyNl1fc21WUnd+bnTzHy9PcJxhzI8MeUG6kJsaWL9Ok72zo9RCZOKd7" crossorigin="anonymous"></script>
