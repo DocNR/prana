@@ -156,6 +156,24 @@ npm run serve registry.json        # then open http://localhost:8787
 The page is the same `buildMultiRepoWorklist` output as the CLI, rendered for a
 browser, with a 60s cache so a refresh doesn't re-hammer relays.
 
+### Claim from the web
+
+Each available row has a **Claim** button (and a **Release** button once you hold it),
+plus a per-repo **clone** link. The button is signed by *your own* signer — the server
+never touches a key and stays read-only. We load [`window.nostr.js`](https://github.com/fiatjaf/window.nostr.js)
+(WNJ), which exposes a NIP-07 `window.nostr` and, when no extension is present, offers a
+NIP-46 bunker/QR flow (e.g. Clave). On click, the browser stamps the time onto the
+server-built claim skeleton (`buildClaimEvent` is the single source of truth), calls
+`window.nostr.signEvent`, and publishes the signed event over a raw WebSocket to the
+**registry-trusted** relays; the row then flips optimistically once a relay confirms.
+
+Security: untrusted strings are escaped and JSON is embedded only in `data-*` attributes
+(never a `<script>`); clone URLs are scheme-checked via `new URL()` (`http(s)` link,
+`nostr:` text, everything else dropped); publish relays are parsed, `wss:`-only, and
+capped; WNJ is pinned with an SRI hash. See
+`docs/superpowers/specs/2026-06-18-web-claim-button-design.md` (incl. the adversarial
+review) for the full threat model.
+
 ## What the resolver guarantees
 
 - an issue with no status event defaults to **Open**
