@@ -62,18 +62,42 @@ function claimText(it: MultiRepoItem): string {
   return `claimed · ${it.claim!.holder!.slice(0, 8)}`;
 }
 
+function controlCell(it: MultiRepoItem): string {
+  const relays = claimRelays(it.relays);
+  const claimable = it.claimSkeleton !== null && relays.length > 0;
+  if (!claimable) return `<td class="act"></td>`;
+  const hidden = isAvailable(it) ? "" : " hidden";
+  return `<td class="act"><button class="claim-btn" data-action="claim"${hidden}>Claim</button></td>`;
+}
+
+function cloneCell(it: MultiRepoItem): string {
+  if (!it.cloneUrl) return `<td class="clone"></td>`;
+  const c = safeClone(it.cloneUrl);
+  if (!c) return `<td class="clone"></td>`;
+  if (c.kind === "href")
+    return `<td class="clone"><a href="${escapeHtml(c.url)}" target="_blank" rel="noopener">clone</a></td>`;
+  return `<td class="clone"><code>git clone ${escapeHtml(c.url)}</code></td>`;
+}
+
 function row(it: MultiRepoItem): string {
   const link = issueLink(it.issueId);
   const subj = escapeHtml(it.subject);
   const subjectCell = link ? `<a href="${link}" target="_blank" rel="noopener">${subj}</a>` : subj;
   const avail = isAvailable(it);
+  const holder = it.claim?.holder ?? "";
+  const relays = claimRelays(it.relays);
+  const skeletonAttr = it.claimSkeleton ? ` data-skeleton="${escapeHtml(JSON.stringify(it.claimSkeleton))}"` : "";
   return [
-    `<tr data-cx="${it.complexity}" data-repo="${escapeHtml(it.repo)}" data-avail="${avail}">`,
+    `<tr data-cx="${it.complexity}" data-repo="${escapeHtml(it.repo)}" data-avail="${avail}"`,
+    ` data-issue-id="${escapeHtml(it.issueId)}" data-relays="${escapeHtml(relays.join(","))}"`,
+    ` data-holder="${escapeHtml(holder)}"${skeletonAttr}>`,
     `<td class="repo">${escapeHtml(it.repo)}</td>`,
     `<td><span class="badge cx-${it.complexity}">${it.complexity}</span></td>`,
     `<td><span class="claim ${avail ? "open" : "taken"}">${escapeHtml(claimText(it))}</span></td>`,
     `<td class="subject">${subjectCell}</td>`,
     `<td class="id">${escapeHtml(it.issueId.slice(0, 8))}</td>`,
+    controlCell(it),
+    cloneCell(it),
     `</tr>`,
   ].join("");
 }
@@ -83,7 +107,7 @@ export function renderWorklistHtml(items: MultiRepoItem[]): string {
   const available = items.filter(isAvailable).length;
   const counts = items.reduce<Record<string, number>>((a, i) => ((a[i.complexity] = (a[i.complexity] ?? 0) + 1), a), {});
   const repoOptions = ['<option value="">all repos</option>', ...repos.map((r) => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`)].join("");
-  const body = items.length ? items.map(row).join("\n") : `<tr><td colspan="5" class="empty">no open issues across the registry</td></tr>`;
+  const body = items.length ? items.map(row).join("\n") : `<tr><td colspan="7" class="empty">no open issues across the registry</td></tr>`;
 
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"/>
@@ -119,7 +143,7 @@ export function renderWorklistHtml(items: MultiRepoItem[]): string {
     <label class="av"><input type="checkbox" id="avail"/> available only</label>
   </div>
   <table>
-    <thead><tr><th>repo</th><th>size</th><th>claim</th><th>subject</th><th>id</th></tr></thead>
+    <thead><tr><th>repo</th><th>size</th><th>claim</th><th>subject</th><th>id</th><th></th><th></th></tr></thead>
     <tbody id="rows">
 ${body}
     </tbody>
