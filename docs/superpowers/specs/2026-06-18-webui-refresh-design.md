@@ -106,11 +106,26 @@ Mirror the existing `webui.test.ts` style (string assertions on rendered HTML; t
 - `escapeHtml` still applied to subject/repo (XSS regression guard).
 - `buildMultiRepoWorklist` items expose `owner` and `d`.
 
+### Adversarial security tests (targeted review)
+
+The one new attack surface is untrusted nostr strings (`owner`, `d`, `relays`, `subject` — all from unverified-author events) flowing into `href`s. Write explicit failing-then-passing tests that feed hostile inputs and assert containment:
+
+- `owner` that is not valid hex / cannot be `npubEncode`d → repo + issue links are omitted (plain text), no thrown error, no malformed `href`.
+- `d` containing `"`, `>`, `<`, a space, `../`, or `javascript:` → the value is `encodeURIComponent`-d in the path segment AND the whole attribute is `escapeHtml`-escaped; the rendered `href` must not break out of the attribute or contain a raw `<`/`"`.
+- `relays[0]` = `javascript:alert(1)`, a non-`wss:`/`https:` scheme, or a non-URL string → `new URL(...)` rejects or host extraction fails → link omitted; a `javascript:` (or any non-`https://gitworkshop.dev/`) `href` must NEVER be produced.
+- `subject` containing `<script>…`, `"><img onerror=…>`, or `javascript:` → rendered as escaped link text (subject is link *text*, never an `href`).
+- non-hex / synthetic `issueId` → `neventEncode` fails → issue link omitted (plain text), no broken `href`.
+- Invariant assertion: every gitworkshop `href` the renderer emits starts with `https://gitworkshop.dev/` (allowlist guard against scheme/host injection).
+
+These run in `test/webui.test.ts` alongside the existing escaping tests.
+
 **Live verification:** `npm run serve registry.json`, then in the browser confirm: no right-side deadspace at desktop width; clicking headers re-sorts (size in S→M→L order); repo/issue links open the correct gitworkshop pages; copy-id puts the full hex on the clipboard; "showing N of M" updates with filters; the page is usable narrowed to phone width.
 
 ## Security
 
 `webui.ts` renders UNTRUSTED nostr strings (subjects, repo names). All interpolation stays `escapeHtml`-escaped. URLs are built only from npub/nevent encodings of validated ids and from `new URL(...).host` of the repo's own relays — no untrusted string is placed into an `href` unescaped. `safeClone` (clone column) is unchanged.
+
+**Review level (decided): targeted security pass.** The high-stakes signer path (claim skeleton → `window.nostr.signEvent` → publish) is explicitly out of scope and unchanged — it already passed an adversarial review (see `2026-06-18-web-claim-button-design.md`), so no full design red-team here. Instead: (1) the adversarial XSS/`href`-injection tests above are written as part of TDD, and (2) the final diff gets a `/security-review` pass focused on the new untrusted-string → URL construction before merge.
 
 ## Open questions
 
@@ -118,4 +133,4 @@ None — layout direction (A), link behavior (repo + issue → gitworkshop, njum
 
 ## Branch / merge logistics
 
-`feat/webui-refresh` is stacked on `feat/unreachable-repo-row` (unmerged, local-only). At merge time, either (a) merge `feat/webui-refresh` → `main` as one unit (brings in both the unreachable-repo work and this refresh), or (b) merge `feat/unreachable-repo-row` → `main` first for a separate unit, then this. Decide at finish time. Pushing `main` prompts the Clave signer and needs `~/.cargo/bin` on PATH — pause and ask the maintainer before any push.
+`feat/unreachable-repo-row` is now merged into `main`, and `feat/webui-refresh` has been rebased onto the updated `main` — so this is a clean branch off `main` carrying only this refresh (spec commit + forthcoming implementation). At finish time, merge `feat/webui-refresh` → `main`. Pushing `main` prompts the Clave signer and needs `~/.cargo/bin` on PATH — pause and ask the maintainer before any push.
