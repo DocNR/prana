@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { ResolvedIssue, KIND } from "./types";
-import { discoverAnnouncement, fetchRepo, defaultQuery, QueryFn, Verifier } from "./fetch";
+import { SimplePool } from "nostr-tools";
+import { discoverAnnouncement, fetchRepo, defaultQuery, poolQuery, QueryFn, Verifier } from "./fetch";
 import { WorklistItem, buildWorklist, gatedClaimLookup, ClaimView } from "./worklist";
 import { ComplexityScorer, heuristicScorer, Complexity } from "./complexity";
 import { buildClaimEvent, ClaimTemplate } from "./claimEvent";
@@ -175,6 +176,29 @@ export async function fetchRepoInput(
   return { ref, resolved, claimFor, relays, cloneUrl };
 }
 
+/**
+ * Fetch every registry ref through ONE shared query — i.e. one warm SimplePool per
+ * run, supplied by the caller — instead of churning a fresh pool per query. A ref
+ * that errors is reported and SKIPPED, not fatal, so the directory still renders the
+ * repos that resolved. The caller owns the pool lifecycle (close/destroy it once).
+ */
+export async function fetchRegistryInputs(
+  refs: RepoRef[],
+  fallbackRelays: string[],
+  query: QueryFn,
+  verify?: Verifier,
+): Promise<RepoInput[]> {
+  const inputs: RepoInput[] = [];
+  for (const ref of refs) {
+    try {
+      inputs.push(await fetchRepoInput(ref, fallbackRelays, undefined, { query, verify }));
+    } catch (e) {
+      console.error(`! skipped ${repoRefCoord(ref)}: ${e instanceof Error ? e.message : e}`);
+    }
+  }
+  return inputs;
+}
+
 // ---------------------------------------------------------------------------
 // CLI:  registry <registry.json> [fallbackRelay...]
 // Live-builds the cross-project worklist over every repo in the curated registry.
@@ -186,15 +210,13 @@ async function main(): Promise<void> {
   if (!registryPath) throw new Error("usage: registry <registry.json> [fallbackRelay...]");
 
   const refs = loadRegistry(registryPath);
-  const inputs: RepoInput[] = [];
-  for (const ref of refs) {
-    try {
-      inputs.push(await fetchRepoInput(ref, fallbackRelays));
-    } catch (e) {
-      console.error(`! skipped ${repoRefCoord(ref)}: ${e instanceof Error ? e.message : e}`);
-    }
+  const pool = new SimplePool();
+  try {
+    const inputs = await fetchRegistryInputs(refs, fallbackRelays, poolQuery(pool));
+    console.log(renderMultiRepoWorklist(await buildMultiRepoWorklist(inputs)));
+  } finally {
+    pool.destroy(); // close the warm pool ONCE, at the end of the run
   }
-  console.log(renderMultiRepoWorklist(await buildMultiRepoWorklist(inputs)));
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

@@ -1,5 +1,7 @@
 import { createServer } from "node:http";
-import { loadRegistry, fetchRepoInput, buildMultiRepoWorklist, RepoInput } from "./registry";
+import { SimplePool } from "nostr-tools";
+import { loadRegistry, fetchRegistryInputs, buildMultiRepoWorklist } from "./registry";
+import { poolQuery } from "./fetch";
 import { renderWorklistHtml } from "./webui";
 
 /**
@@ -19,15 +21,13 @@ let cache: { at: number; html: string } | null = null;
 
 async function buildHtml(): Promise<string> {
   const refs = loadRegistry(registryPath);
-  const inputs: RepoInput[] = [];
-  for (const ref of refs) {
-    try {
-      inputs.push(await fetchRepoInput(ref, fallbackRelays));
-    } catch (e) {
-      console.error(`! skipped ${ref.owner}:${ref.d}: ${e instanceof Error ? e.message : e}`);
-    }
+  const pool = new SimplePool();
+  try {
+    const inputs = await fetchRegistryInputs(refs, fallbackRelays, poolQuery(pool));
+    return renderWorklistHtml(await buildMultiRepoWorklist(inputs));
+  } finally {
+    pool.destroy(); // one warm pool per build; close it once
   }
-  return renderWorklistHtml(await buildMultiRepoWorklist(inputs));
 }
 
 const server = createServer(async (req, res) => {
