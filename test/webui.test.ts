@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderWorklistHtml, escapeHtml, issueLink } from "../src/webui";
+import { renderWorklistHtml, escapeHtml, issueLink, claimRelays, safeClone } from "../src/webui";
 import { MultiRepoItem } from "../src/registry";
 
 function item(over: Partial<MultiRepoItem> = {}): MultiRepoItem {
@@ -61,5 +61,27 @@ describe("renderWorklistHtml", () => {
     const html = renderWorklistHtml([item({ repo: "ngit" }), item({ repo: "zebra" })]);
     expect(html).toMatch(/<option value="ngit">ngit<\/option>/);
     expect(html).toMatch(/<option value="zebra">zebra<\/option>/);
+  });
+});
+
+describe("claimRelays", () => {
+  it("keeps only wss: urls, dedupes, and caps at 8", () => {
+    const many = Array.from({ length: 12 }, (_, i) => `wss://r${i}.example`);
+    expect(claimRelays(["wss://a", "wss://a", "ws://insecure", "https://x", "not-a-url"]))
+      .toEqual(["wss://a"]);
+    expect(claimRelays(many)).toHaveLength(8);
+  });
+});
+
+describe("safeClone", () => {
+  it("returns an href for http(s)", () => {
+    expect(safeClone("https://example.com/r.git")).toEqual({ kind: "href", url: "https://example.com/r.git" });
+  });
+  it("returns inert text for nostr:", () => {
+    expect(safeClone("nostr://npub1abc/repo")).toEqual({ kind: "text", url: "nostr://npub1abc/repo" });
+  });
+  it("drops javascript:, data:, vbscript:, and junk (case/space-insensitive)", () => {
+    for (const u of ["javascript:alert(1)", "  javascript:alert(1)", "JaVaScRiPt:x", "data:text/html,x", "vbscript:x", "nope"])
+      expect(safeClone(u)).toBeNull();
   });
 });

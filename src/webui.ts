@@ -11,6 +11,30 @@ import { MultiRepoItem } from "./registry";
  * not be able to inject script into the directory page.
  */
 
+/** Publish targets, sanitized: parse, keep only `wss:`, dedupe, cap at 8 (spec review #2). */
+export function claimRelays(relays: string[]): string[] {
+  const out: string[] = [];
+  for (const r of relays) {
+    let u: URL;
+    try { u = new URL(r); } catch { continue; }
+    if (u.protocol !== "wss:") continue;
+    const href = u.href.replace(/\/$/, ""); // new URL adds a trailing slash; normalize it off
+    if (!out.includes(href)) out.push(href);
+    if (out.length === 8) break;
+  }
+  return out;
+}
+
+/** A clone URL classified for safe rendering (spec review #5). `new URL().protocol` is the
+ *  only robust scheme check — string matching is bypassable. */
+export function safeClone(clone: string): { kind: "href" | "text"; url: string } | null {
+  let u: URL;
+  try { u = new URL(clone); } catch { return null; }
+  if (u.protocol === "http:" || u.protocol === "https:") return { kind: "href", url: clone };
+  if (u.protocol === "nostr:") return { kind: "text", url: clone };
+  return null; // javascript:, data:, vbscript:, … → dropped
+}
+
 export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
