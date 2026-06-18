@@ -8,10 +8,12 @@ import {
   loadRegistry,
   buildMultiRepoWorklist,
   renderMultiRepoWorklist,
+  fetchRepoInput,
   RepoInput,
 } from "../src/registry";
 import { ResolvedIssue, NostrEvent, KIND } from "../src/types";
 import { ClaimView } from "../src/worklist";
+import { QueryFn, Verifier } from "../src/fetch";
 
 function resolved(id: string, subject: string, body = "", state: ResolvedIssue["state"] = "open"): ResolvedIssue {
   const issue: NostrEvent = {
@@ -114,6 +116,41 @@ describe("renderMultiRepoWorklist", () => {
 
   it("handles an empty registry result", () => {
     expect(renderMultiRepoWorklist([])).toMatch(/no open issues across the registry/);
+  });
+});
+
+describe("fetchRepoInput — query/verify threading (resilience)", () => {
+  const ann: NostrEvent = {
+    id: "annR",
+    pubkey: OWNER,
+    created_at: 2,
+    kind: KIND.REPO_ANNOUNCEMENT,
+    tags: [["d", "ngit"], ["relays", "wss://relay.one"]],
+    content: "",
+  };
+  const acceptAll: Verifier = () => true;
+
+  it("survives a transient discover miss and threads ONE injected query through every sub-query", async () => {
+    let discoverCalls = 0;
+    const kindsSeen: number[] = [];
+    const query: QueryFn = async (_relays, filter) => {
+      const k = filter.kinds?.[0];
+      if (typeof k === "number") kindsSeen.push(k);
+      if (filter.kinds?.includes(KIND.REPO_ANNOUNCEMENT)) {
+        discoverCalls += 1;
+        return discoverCalls === 1 ? [] : [ann]; // first miss (transient), then hit
+      }
+      return []; // no issues -> no statuses, no claims
+    };
+
+    const input = await fetchRepoInput({ owner: OWNER, d: "ngit" }, ["wss://relay.one"], 0, {
+      query,
+      verify: acceptAll,
+    });
+
+    expect(input.ref.d).toBe("ngit"); // repo resolved, NOT skipped
+    expect(discoverCalls).toBe(2); // the transient miss was retried
+    expect(input.cloneUrl).toBeNull(); // ann carries no clone tag
   });
 });
 
