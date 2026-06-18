@@ -59,7 +59,7 @@ export function gitworkshopRepoUrl(owner: string, d: string, relays: string[]): 
   try {
     const u = new URL(relays[0]);
     if (u.protocol !== "wss:") return null; // enforce wss: (consistent with claimRelays); blocks http:/javascript:/etc.
-    host = u.host;
+    host = encodeURIComponent(u.hostname) + (u.port ? `:${u.port}` : "");
   } catch { return null; }
   let npub: string;
   try { npub = nip19.npubEncode(owner); } catch { return null; }

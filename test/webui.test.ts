@@ -205,6 +205,21 @@ describe("gitworkshop URL builders", () => {
     const u = gitworkshopIssueUrl("https://gitworkshop.dev/x/y/z", "ac257db69935afa151ba8f194ec3f73845b5432e4d6b9ad18a23d38d2603ffcf", ["http://nope"]);
     expect(u).toMatch(/\/issues\/nevent1[0-9a-z]+$/);
   });
+
+  it("preserves a relay port literally in the gitworkshop host segment", () => {
+    const OWNER3 = "3129509e23d3a6125e1451a5912dbe01099e151726c4766b44e1ecb8c846f506";
+    expect(gitworkshopRepoUrl(OWNER3, "prana", ["wss://relay.example:8443"]))
+      .toBe("https://gitworkshop.dev/npub1xy54p83r6wnpyhs52xjeztd7qyyeu9ghymz8v66yu8kt3jzx75rqhf3urc/relay.example:8443/prana");
+  });
+
+  it("ADVERSARIAL: a relay host with a quote never yields a raw quote in the URL", () => {
+    const OWNER3 = "3129509e23d3a6125e1451a5912dbe01099e151726c4766b44e1ecb8c846f506";
+    const u = gitworkshopRepoUrl(OWNER3, "prana", ['wss://ev"il.example']);
+    if (u !== null) { // new URL may instead reject it (→ null), which is also safe
+      expect(u).not.toContain('"');
+      expect(u.startsWith("https://gitworkshop.dev/")).toBe(true);
+    }
+  });
 });
 
 describe("renderWorklistHtml — claim controls", () => {
