@@ -45,15 +45,6 @@ export function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-/** Deep-link an issue to njump (renders any nostr event). Falls back to no link
- *  if the id isn't a valid 64-hex event id (e.g. synthetic test ids). */
-export function issueLink(issueId: string): string | null {
-  try {
-    return `https://njump.me/${nip19.noteEncode(issueId)}`;
-  } catch {
-    return null;
-  }
-}
 
 const GITWORKSHOP = "https://gitworkshop.dev";
 
@@ -105,18 +96,25 @@ function controlCell(it: MultiRepoItem): string {
 }
 
 function cloneCell(it: MultiRepoItem): string {
-  if (!it.cloneUrl) return `<td class="clone"></td>`;
+  if (!it.cloneUrl) return `<td class="clone" data-label="clone"></td>`;
   const c = safeClone(it.cloneUrl);
-  if (!c) return `<td class="clone"></td>`;
+  if (!c) return `<td class="clone" data-label="clone"></td>`;
   if (c.kind === "href")
-    return `<td class="clone"><a href="${escapeHtml(c.url)}" target="_blank" rel="noopener">clone</a></td>`;
-  return `<td class="clone"><code>git clone ${escapeHtml(c.url)}</code></td>`;
+    return `<td class="clone" data-label="clone"><a href="${escapeHtml(c.url)}" target="_blank" rel="noopener">clone</a></td>`;
+  return `<td class="clone" data-label="clone"><code>git clone ${escapeHtml(c.url)}</code></td>`;
 }
 
 function row(it: MultiRepoItem): string {
-  const link = issueLink(it.issueId);
+  const repoUrl = gitworkshopRepoUrl(it.owner, it.d, it.relays);
+  const issueUrl = gitworkshopIssueUrl(repoUrl, it.issueId, it.relays);
+  const repoLabel = escapeHtml(it.repo);
+  const repoCell = repoUrl
+    ? `<a href="${escapeHtml(repoUrl)}" target="_blank" rel="noopener">${repoLabel}</a>`
+    : repoLabel;
   const subj = escapeHtml(it.subject);
-  const subjectCell = link ? `<a href="${link}" target="_blank" rel="noopener">${subj}</a>` : subj;
+  const subjectCell = issueUrl
+    ? `<a href="${escapeHtml(issueUrl)}" target="_blank" rel="noopener">${subj}</a>`
+    : subj;
   const avail = isAvailable(it);
   const holder = it.claim?.holder ?? "";
   const relays = claimRelays(it.relays);
@@ -125,11 +123,11 @@ function row(it: MultiRepoItem): string {
     `<tr data-cx="${it.complexity}" data-repo="${escapeHtml(it.repo)}" data-avail="${avail}"`,
     ` data-issue-id="${escapeHtml(it.issueId)}" data-relays="${escapeHtml(relays.join(","))}"`,
     ` data-holder="${escapeHtml(holder)}"${skeletonAttr}>`,
-    `<td class="repo">${escapeHtml(it.repo)}</td>`,
-    `<td><span class="badge cx-${it.complexity}">${it.complexity}</span></td>`,
-    `<td><span class="claim ${avail ? "open" : "taken"}">${escapeHtml(claimText(it))}</span></td>`,
-    `<td class="subject">${subjectCell}</td>`,
-    `<td class="id">${escapeHtml(it.issueId.slice(0, 8))}</td>`,
+    `<td class="repo" data-label="repo">${repoCell}</td>`,
+    `<td data-label="size"><span class="badge cx-${it.complexity}">${it.complexity}</span></td>`,
+    `<td data-label="claim"><span class="claim ${avail ? "open" : "taken"}">${escapeHtml(claimText(it))}</span></td>`,
+    `<td class="subject" data-label="subject">${subjectCell}</td>`,
+    `<td class="id" data-label="id"><span class="idtext">${escapeHtml(it.issueId.slice(0, 8))}</span><button class="copy-id" type="button" aria-label="Copy full issue id" title="Copy full issue id">⧉</button></td>`,
     controlCell(it),
     cloneCell(it),
     `</tr>`,
@@ -283,6 +281,14 @@ ${body}
       alert("Failed: " + (e && e.message ? e.message : e));
     }
   }
+  document.querySelectorAll(".copy-id").forEach((b) => b.addEventListener("click", () => {
+    const id = b.closest("tr").dataset.issueId;
+    if (!id || !navigator.clipboard) return;
+    navigator.clipboard.writeText(id).then(() => {
+      const t = b.textContent; b.textContent = "✓";
+      setTimeout(() => { b.textContent = t; }, 1000);
+    }).catch(() => {});
+  }));
   document.querySelectorAll(".claim-btn").forEach((b) => b.addEventListener("click", () => act(b)));
 </script>
 </body></html>`;

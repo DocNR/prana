@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderWorklistHtml, escapeHtml, issueLink, claimRelays, safeClone, gitworkshopRepoUrl, gitworkshopIssueUrl } from "../src/webui";
+import { renderWorklistHtml, escapeHtml, claimRelays, safeClone, gitworkshopRepoUrl, gitworkshopIssueUrl } from "../src/webui";
 import { MultiRepoItem, UnreachableRepo } from "../src/registry";
 import { buildClaimEvent } from "../src/claimEvent";
 
@@ -24,18 +24,9 @@ function item(over: Partial<MultiRepoItem> = {}): MultiRepoItem {
   };
 }
 
-describe("escapeHtml / issueLink", () => {
+describe("escapeHtml", () => {
   it("escapes HTML metacharacters", () => {
     expect(escapeHtml(`<b>"x"&'</b>`)).toBe("&lt;b&gt;&quot;x&quot;&amp;&#39;&lt;/b&gt;");
-  });
-
-  it("encodes a valid 64-hex id to an njump note link", () => {
-    const link = issueLink("a".repeat(64));
-    expect(link).toMatch(/^https:\/\/njump\.me\/note1/);
-  });
-
-  it("returns null for an id that isn't a valid event id", () => {
-    expect(issueLink("not-hex")).toBeNull();
   });
 });
 
@@ -56,11 +47,6 @@ describe("renderWorklistHtml", () => {
     const html = renderWorklistHtml([item({ subject: `<script>alert(1)</script>` })]);
     expect(html).not.toContain("<script>alert(1)</script>");
     expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
-  });
-
-  it("links a real issue id to njump", () => {
-    const html = renderWorklistHtml([item({ issueId: "d".repeat(64) })]);
-    expect(html).toMatch(/href="https:\/\/njump\.me\/note1/);
   });
 
   it("shows an empty state when there are no issues", () => {
@@ -102,6 +88,41 @@ describe("renderWorklistHtml — unreachable repos", () => {
   it("renders no unreachable banner when every repo resolved", () => {
     const html = renderWorklistHtml([item()]);
     expect(html).not.toMatch(/couldn.?t be reached/i);
+  });
+});
+
+describe("renderWorklistHtml — gitworkshop links + copy-id (Task 3)", () => {
+  const OWNER = "3129509e23d3a6125e1451a5912dbe01099e151726c4766b44e1ecb8c846f506";
+
+  it("links the repo name and the subject to gitworkshop.dev", () => {
+    const html = renderWorklistHtml([item({ owner: OWNER, d: "prana", repo: "prana", issueId: "a".repeat(64), relays: ["wss://relay.ngit.dev"] })]);
+    expect(html).toMatch(/href="https:\/\/gitworkshop\.dev\/npub1[0-9a-z]+\/relay\.ngit\.dev\/prana"/); // repo link
+    expect(html).toMatch(/href="https:\/\/gitworkshop\.dev\/npub1[0-9a-z]+\/relay\.ngit\.dev\/prana\/issues\/nevent1[0-9a-z]+"/); // issue link
+    expect(html).not.toContain("njump.me"); // njump dropped
+  });
+
+  it("renders a copy-id button with an aria-label", () => {
+    const html = renderWorklistHtml([item()]);
+    expect(html).toMatch(/class="copy-id"[^>]*aria-label="Copy full issue id"/);
+  });
+
+  it("ADVERSARIAL: never emits a non-gitworkshop href from row data (no javascript:, no break-out)", () => {
+    const html = renderWorklistHtml([item({ owner: OWNER, d: 'a"/<x>', repo: 'r"<x>', subject: `</a><img src=x onerror=alert(1)>`, relays: ["wss://relay.ngit.dev"] })]);
+    const tbody = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/)?.[1] ?? "";
+    expect(tbody).not.toMatch(/href="javascript:/i);
+    for (const m of tbody.matchAll(/href="([^"]*)"/g)) {
+      expect(m[1].startsWith("https://gitworkshop.dev/") || m[1].startsWith("https://x.example/")).toBe(true); // gitworkshop or the clone url
+    }
+    expect(tbody).toContain("&lt;img"); // the hostile subject is escaped as text
+  });
+
+  it("falls back to plain text (no link) when relays are missing or id is non-hex", () => {
+    const noRelays = renderWorklistHtml([item({ relays: [], claimSkeleton: null })]);
+    const tbody1 = noRelays.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/)?.[1] ?? "";
+    expect(tbody1).not.toContain("gitworkshop.dev");
+    const badId = renderWorklistHtml([item({ issueId: "not-hex", claimSkeleton: null })]);
+    const tbody2 = badId.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/)?.[1] ?? "";
+    expect(tbody2).not.toMatch(/\/issues\/nevent/);
   });
 });
 
