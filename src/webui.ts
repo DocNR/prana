@@ -171,6 +171,10 @@ export function renderWorklistHtml(items: MultiRepoItem[], unreachable: Unreacha
   table { border-collapse: collapse; width: 100%; }
   th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #8883; }
   th { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; opacity: .65; }
+  th button.sort { font: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; color: inherit; text-transform: inherit; letter-spacing: inherit; display: inline-flex; align-items: center; gap: .25rem; }
+  th button.sort .arr::after { content: ""; font-size: .7em; opacity: .7; }
+  th button.sort[aria-sort="ascending"] .arr::after { content: "▲"; }
+  th button.sort[aria-sort="descending"] .arr::after { content: "▼"; }
   .badge { display: inline-block; min-width: 1.2rem; text-align: center; border-radius: 4px; padding: 0 .35rem; font-weight: 600; }
   .cx-S { background: #2e7d32; color: #fff; } .cx-M { background: #b9770e; color: #fff; } .cx-L { background: #b23b3b; color: #fff; }
   .claim.open { color: #2e7d32; } .claim.taken { opacity: .6; }
@@ -195,7 +199,13 @@ export function renderWorklistHtml(items: MultiRepoItem[], unreachable: Unreacha
     <label class="av"><input type="checkbox" id="avail"/> available only</label>
   </div>
   <table>
-    <thead><tr><th>repo</th><th>size</th><th>claim</th><th>subject</th><th>id</th><th></th><th></th></tr></thead>
+    <thead><tr>
+      <th><button class="sort" type="button" data-sort="repo" aria-sort="none">repo<span class="arr" aria-hidden="true"></span></button></th>
+      <th><button class="sort" type="button" data-sort="size" aria-sort="none">size<span class="arr" aria-hidden="true"></span></button></th>
+      <th><button class="sort" type="button" data-sort="claim" aria-sort="none">claim<span class="arr" aria-hidden="true"></span></button></th>
+      <th><button class="sort" type="button" data-sort="subject" aria-sort="none">subject<span class="arr" aria-hidden="true"></span></button></th>
+      <th>id</th><th></th><th></th>
+    </tr></thead>
     <tbody id="rows">
 ${body}
     </tbody>
@@ -203,6 +213,27 @@ ${body}
 <script>
   const state = { cx: "", repo: "", avail: false };
   const rows = [...document.querySelectorAll("#rows tr[data-cx]")];
+  const tbody = document.getElementById("rows");
+  const CX = { S: 0, M: 1, L: 2 };
+  const sortState = { key: null, dir: 1 };
+  function sortKey(tr, key) {
+    if (key === "size") return CX[tr.dataset.cx] ?? 99;
+    if (key === "claim") return tr.dataset.avail === "true" ? 0 : 1; // available first
+    if (key === "subject") return (tr.querySelector(".subject")?.textContent || "").toLowerCase();
+    return (tr.dataset.repo || "").toLowerCase(); // "repo"
+  }
+  function sortBy(key) {
+    sortState.dir = sortState.key === key ? -sortState.dir : 1;
+    sortState.key = key;
+    const sorted = [...tbody.querySelectorAll("tr[data-cx]")].sort((a, b) => {
+      const ka = sortKey(a, key), kb = sortKey(b, key);
+      return (ka < kb ? -1 : ka > kb ? 1 : 0) * sortState.dir;
+    });
+    for (const r of sorted) tbody.appendChild(r);
+    document.querySelectorAll("button.sort").forEach((b) =>
+      b.setAttribute("aria-sort", b.dataset.sort === key ? (sortState.dir === 1 ? "ascending" : "descending") : "none"));
+  }
+  document.querySelectorAll("button.sort").forEach((b) => b.addEventListener("click", () => sortBy(b.dataset.sort)));
   function apply() {
     for (const r of rows) {
       const okCx = !state.cx || r.dataset.cx === state.cx;

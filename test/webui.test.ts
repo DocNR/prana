@@ -148,6 +148,18 @@ describe("safeClone", () => {
   });
 });
 
+describe("renderWorklistHtml — sortable headers (Task 5)", () => {
+  it("makes repo/size/claim/subject sortable and leaves id/action/clone plain", () => {
+    const html = renderWorklistHtml([item()]);
+    for (const key of ["repo", "size", "claim", "subject"]) {
+      expect(html).toContain(`data-sort="${key}"`);
+    }
+    expect(html).toMatch(/class="sort"[^>]*aria-sort="none"/);
+    // exactly four sortable columns
+    expect((html.match(/data-sort=/g) ?? []).length).toBe(4);
+  });
+});
+
 describe("renderWorklistHtml — wide layout (Task 4)", () => {
   it("uses a 1200px max-width, not the old 960px", () => {
     const html = renderWorklistHtml([item()]);
