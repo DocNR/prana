@@ -1,6 +1,16 @@
 # Handoff — fetch layer live verification
+_Last updated: 2026-06-18 ~09:30 EST_
 
-State as of the latest push to `claude/prana-continuation-ixmkl6`.
+## This session (2026-06-18) — tooling only, no prana code changed
+- Created a **global** Claude Code skill for `ngit` at `~/.claude/skills/ngit/`
+  (SKILL.md + `references/commands.md`), modeled on the `nak` skill. It's the front
+  door for NIP-34 git-over-nostr work and makes the **ngit-vs-nak** boundary explicit
+  (collaboration verb → ngit; low-level event/relay/encoding → nak). See memory
+  `ngit-skill.md`. Useful for the live-verification steps below (they lean on `nak`/ngit).
+- Validated with skill-creator + ran the description trigger-optimizer (kept the original
+  description; eval artifacts in `~/.claude/skills/ngit-workspace/`).
+- **Prana repo untouched**: working tree clean, base still green (24 passing). All scope
+  below is unchanged and still open.
 
 ## Where things are
 
