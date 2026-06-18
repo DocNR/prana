@@ -171,6 +171,8 @@ export function renderWorklistHtml(items: MultiRepoItem[], unreachable: Unreacha
   table { border-collapse: collapse; width: 100%; }
   th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #8883; }
   th { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; opacity: .65; }
+  thead th { position: sticky; top: 0; background: Canvas; }
+  .count { opacity: .7; font-size: .85rem; margin-left: auto; }
   th button.sort { font: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; color: inherit; text-transform: inherit; letter-spacing: inherit; display: inline-flex; align-items: center; gap: .25rem; }
   th button.sort .arr::after { content: ""; font-size: .7em; opacity: .7; }
   th button.sort[aria-sort="ascending"] .arr::after { content: "▲"; }
@@ -197,6 +199,7 @@ export function renderWorklistHtml(items: MultiRepoItem[], unreachable: Unreacha
     <button class="f" data-cx="L">L</button>
     <select id="repo">${repoOptions}</select>
     <label class="av"><input type="checkbox" id="avail"/> available only</label>
+    <span class="count" id="count">showing ${items.length} of ${items.length}</span>
   </div>
   <table>
     <thead><tr>
@@ -213,6 +216,11 @@ ${body}
 <script>
   const state = { cx: "", repo: "", avail: false };
   const rows = [...document.querySelectorAll("#rows tr[data-cx]")];
+  const countEl = document.getElementById("count");
+  function updateCount() {
+    const visible = rows.filter((r) => r.style.display !== "none").length;
+    if (countEl) countEl.textContent = \`showing \${visible} of \${rows.length}\`;
+  }
   const tbody = document.getElementById("rows");
   const CX = { S: 0, M: 1, L: 2 };
   const sortState = { key: null, dir: 1 };
@@ -241,6 +249,7 @@ ${body}
       const okAvail = !state.avail || r.dataset.avail === "true";
       r.style.display = okCx && okRepo && okAvail ? "" : "none";
     }
+    updateCount();
   }
   document.querySelectorAll("button.f").forEach((b) => b.addEventListener("click", () => {
     document.querySelectorAll("button.f").forEach((x) => x.classList.remove("on"));

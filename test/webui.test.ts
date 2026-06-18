@@ -168,6 +168,15 @@ describe("renderWorklistHtml — wide layout (Task 4)", () => {
   });
 });
 
+describe("renderWorklistHtml — sticky header + live count (Task 6)", () => {
+  it("makes the header sticky and seeds a 'showing N of M' counter", () => {
+    const html = renderWorklistHtml([item({ issueId: "a".repeat(64) }), item({ issueId: "b".repeat(64) })]);
+    expect(html).toMatch(/thead th\s*{[^}]*position:\s*sticky/);
+    expect(html).toContain('id="count"');
+    expect(html).toMatch(/showing 2 of 2/);
+  });
+});
+
 describe("renderWorklistHtml — WNJ signer", () => {
   it("includes the WNJ signer script (pinned + SRI) and the claim handler", () => {
     const html = renderWorklistHtml([item()]);
