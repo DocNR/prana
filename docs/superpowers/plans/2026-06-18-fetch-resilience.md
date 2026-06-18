@@ -587,9 +587,11 @@ If a run still shows 1 repo, that points to a *genuinely* unreachable relay (out
 
 ---
 
-## Follow-up (do NOT build in this task)
+## Follow-up — DONE (separate branch `feat/unreachable-repo-row`)
 
-Surface a visible "couldn't reach repo X" row in the worklist when a repo is genuinely unreachable, instead of silently omitting it. This plan deliberately only prevents dropping a repo on a *transient* failure; a persistently-down relay still drops its repo silently. Track separately.
+Surface a visible "couldn't reach repo X" row in the worklist when a repo is genuinely unreachable, instead of silently omitting it. This plan deliberately only prevented dropping a repo on a *transient* failure; a persistently-down relay still dropped its repo silently.
+
+Built: `fetchRegistryInputs` now returns `{ inputs, unreachable }` — a failed ref becomes an `UnreachableRepo { ref, error }` marker instead of being dropped. `renderMultiRepoWorklist` prints a `! N repo(s) unreachable` footer; `renderWorklistHtml` renders a `role="alert"` banner above the table (label + error, both escaped). `buildMultiRepoWorklist`, the folds, and `buildClaimEvent` are unchanged.
 
 ---
 
