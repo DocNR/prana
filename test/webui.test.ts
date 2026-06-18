@@ -10,6 +10,9 @@ function item(over: Partial<MultiRepoItem> = {}): MultiRepoItem {
     reasons: [],
     claim: null,
     repo: "ngit",
+    relays: [],
+    cloneUrl: null,
+    claimSkeleton: null,
     ...over,
   };
 }

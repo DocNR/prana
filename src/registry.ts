@@ -3,6 +3,8 @@ import { ResolvedIssue, KIND } from "./types";
 import { discoverAnnouncement, fetchRepo, RawEvent } from "./fetch";
 import { WorklistItem, buildWorklist, gatedClaimLookup, ClaimView } from "./worklist";
 import { ComplexityScorer, heuristicScorer, Complexity } from "./complexity";
+import { buildClaimEvent, ClaimTemplate } from "./claimEvent";
+import { repoClone } from "./nip34";
 
 /**
  * The opt-in registry (roadmap #4): the curated set of repos the directory spans.
@@ -54,10 +56,17 @@ export interface RepoInput {
   ref: RepoRef;
   resolved: ResolvedIssue[];
   claimFor?: (issueId: string) => ClaimView | undefined;
+  relays?: string[];        // registry-trusted publish targets
+  cloneUrl?: string | null; // from the 30617 announcement `clone` tag
 }
 
 /** A worklist row tagged with the repo it came from. */
-export type MultiRepoItem = WorklistItem & { repo: string };
+export type MultiRepoItem = WorklistItem & {
+  repo: string;
+  relays: string[];
+  cloneUrl: string | null;
+  claimSkeleton: ClaimTemplate | null; // null when not claimable (no relays / non-hex id)
+};
 
 const COMPLEXITY_ORDER: Record<Complexity, number> = { S: 0, M: 1, L: 2 };
 const isAvailable = (it: MultiRepoItem): boolean => !it.claim || it.claim.holder === null;
@@ -76,7 +85,13 @@ export async function buildMultiRepoWorklist(
   for (const r of repos) {
     const label = r.ref.name ?? r.ref.d;
     const items = await buildWorklist(r.resolved, scorer, r.claimFor);
-    for (const it of items) all.push({ ...it, repo: label });
+    const relays = r.relays ?? [];
+    const cloneUrl = r.cloneUrl ?? null;
+    for (const it of items) {
+      const claimSkeleton =
+        relays.length && HEX64.test(it.issueId) ? buildClaimEvent(it.issueId, { now: 0 }) : null;
+      all.push({ ...it, repo: label, relays, cloneUrl, claimSkeleton });
+    }
   }
   all.sort((a, b) => {
     const availDiff = Number(isAvailable(b)) - Number(isAvailable(a));
@@ -156,7 +171,9 @@ export async function fetchRepoInput(
       pool.close(relays);
     }
   }
-  return { ref, resolved, claimFor };
+  const cloneList = repoClone(announcement);
+  const cloneUrl = cloneList.find((u) => u.startsWith("https://")) ?? cloneList[0] ?? null;
+  return { ref, resolved, claimFor, relays, cloneUrl };
 }
 
 // ---------------------------------------------------------------------------

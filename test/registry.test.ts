@@ -116,3 +116,23 @@ describe("renderMultiRepoWorklist", () => {
     expect(renderMultiRepoWorklist([])).toMatch(/no open issues across the registry/);
   });
 });
+
+describe("buildMultiRepoWorklist — relays/cloneUrl/claimSkeleton threading", () => {
+  it("carries relays, cloneUrl, and a claim skeleton onto each item", async () => {
+    const id = "a".repeat(64);
+    const input: RepoInput = {
+      ref: { owner: "1".repeat(64), d: "demo", name: "demo" },
+      relays: ["wss://relay.one"],
+      cloneUrl: "https://demo.example/r.git",
+      resolved: [{
+        issue: { id, pubkey: "2".repeat(64), created_at: 1, kind: 1621, tags: [["subject", "demo issue"]], content: "" },
+        state: "open", decidedBy: null, ambiguousTimestamp: false, forkSignal: null,
+      }],
+    };
+    const items = await buildMultiRepoWorklist([input]);
+    expect(items[0].relays).toEqual(["wss://relay.one"]);
+    expect(items[0].cloneUrl).toBe("https://demo.example/r.git");
+    expect(items[0].claimSkeleton?.tags).toContainEqual(["d", id]);
+    expect(items[0].claimSkeleton?.tags).toContainEqual(["e", id, "", "root"]);
+  });
+});
