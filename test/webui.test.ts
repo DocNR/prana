@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderWorklistHtml, escapeHtml, claimRelays, safeClone, gitworkshopRepoUrl, gitworkshopIssueUrl } from "../src/webui";
+import { renderWorklistHtml, escapeHtml, claimRelays, safeClone, gitworkshopRepoUrl, gitworkshopIssueUrl, ngitCloneUrl } from "../src/webui";
 import { MultiRepoItem, UnreachableRepo } from "../src/registry";
 import { buildClaimEvent } from "../src/claimEvent";
 
@@ -257,6 +257,22 @@ describe("gitworkshop URL builders", () => {
       expect(u).not.toContain('"');
       expect(u.startsWith("https://gitworkshop.dev/")).toBe(true);
     }
+  });
+});
+
+describe("ngitCloneUrl", () => {
+  const OWNER = "3129509e23d3a6125e1451a5912dbe01099e151726c4766b44e1ecb8c846f506";
+  const NPUB = "npub1xy54p83r6wnpyhs52xjeztd7qyyeu9ghymz8v66yu8kt3jzx75rqhf3urc";
+
+  it("builds the verified nostr:// clone coordinate (matches the maintainer's own remote)", () => {
+    expect(ngitCloneUrl(OWNER, "prana", ["wss://relay.ngit.dev"])).toBe(`nostr://${NPUB}/relay.ngit.dev/prana`);
+  });
+
+  it("ADVERSARIAL: null on non-hex owner, empty relays, non-wss relay, or junk relay", () => {
+    expect(ngitCloneUrl("not-hex", "prana", ["wss://relay.ngit.dev"])).toBeNull();
+    expect(ngitCloneUrl(OWNER, "prana", [])).toBeNull();
+    expect(ngitCloneUrl(OWNER, "prana", ["https://relay.ngit.dev"])).toBeNull();
+    expect(ngitCloneUrl(OWNER, "prana", ["not a url"])).toBeNull();
   });
 });
 

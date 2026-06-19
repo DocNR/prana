@@ -48,11 +48,11 @@ export function escapeHtml(s: string): string {
 
 const GITWORKSHOP = "https://gitworkshop.dev";
 
-/** gitworkshop.dev repo page, or null if it can't be built safely.
- *  Format (verified live): https://gitworkshop.dev/<npub>/<relay-host>/<d>.
- *  Built only from a bech32 npub + new URL().host + an encoded d — no untrusted
- *  string reaches the URL un-encoded, so the result is always a gitworkshop https URL. */
-export function gitworkshopRepoUrl(owner: string, d: string, relays: string[]): string | null {
+/** The shared `<npub>/<relay-host>/<d>` coordinate path, or null if unbuildable.
+ *  owner must be 64-hex; relays[0] must be a wss: URL. Host is hostname-encoded
+ *  (+ literal port); d is percent-encoded. No untrusted string reaches the result
+ *  un-encoded — callers prefix a fixed scheme. */
+function repoCoordPath(owner: string, d: string, relays: string[]): string | null {
   if (!/^[0-9a-f]{64}$/i.test(owner)) return null; // a wrong-length pubkey still npub-encodes → reject it, no dead link
   if (!relays.length) return null;
   let host: string;
@@ -63,7 +63,22 @@ export function gitworkshopRepoUrl(owner: string, d: string, relays: string[]): 
   } catch { return null; }
   let npub: string;
   try { npub = nip19.npubEncode(owner); } catch { return null; }
-  return `${GITWORKSHOP}/${npub}/${host}/${encodeURIComponent(d)}`;
+  return `${npub}/${host}/${encodeURIComponent(d)}`;
+}
+
+/** gitworkshop.dev repo page, or null. Format (verified live):
+ *  https://gitworkshop.dev/<npub>/<relay-host>/<d>. */
+export function gitworkshopRepoUrl(owner: string, d: string, relays: string[]): string | null {
+  const p = repoCoordPath(owner, d, relays);
+  return p ? `${GITWORKSHOP}/${p}` : null;
+}
+
+/** ngit-native clone URL: `git clone <this>` wires up the nostr remote (needs ngit),
+ *  so a PR lands back on nostr where PRana's worklist/claims live. Same coordinate as
+ *  the gitworkshop link / the maintainer's own push remote. null if unbuildable. */
+export function ngitCloneUrl(owner: string, d: string, relays: string[]): string | null {
+  const p = repoCoordPath(owner, d, relays);
+  return p ? `nostr://${p}` : null;
 }
 
 /** gitworkshop.dev issue page, or null. Format: <repoUrl>/issues/<nevent>, where the
