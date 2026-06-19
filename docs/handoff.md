@@ -21,7 +21,7 @@ The substrate is done (resolver + fetch gate, complexity, worklist, claim fold r
 polished read-only web UI). This session also produced the **gzuuus-readiness deliverables**:
 - **Trust-model decision record:** `docs/superpowers/specs/2026-06-18-agent-eligibility-design.md`
   — consent gates the **global directory** via a `30617` opt-in tag (reading/PRing stay
-  permissionless); optional issue-label curation (`help-wanted`/`agent-ok`); **two views**
+  permissionless); a STRICT maintainer-whitelist of agent-eligible issues (`agent-ok` label, resolved like the status fold, doubles as spam defense); **two views**
   (global opted-in + personal NIP-51 followed-repos). Decomposes into 3 sub-projects.
 - **Three ngit issues filed on prana:** `8ba97209` fetch concurrency+caching, `6e6aae22`
   followed-repos personal worklist, `e6706fe9` repo consent model.
