@@ -349,4 +349,12 @@ describe("renderWorklistHtml — clone chips (Task 3)", () => {
     expect(html).not.toContain("javascript:alert");
     expect((cloneTd(html).match(/clone-chip/g) ?? []).length).toBe(1); // only the ngit chip
   });
+
+  it("ADVERSARIAL: a hostile https mirror URL with a quote is escaped, never raw in the attribute", () => {
+    const html = renderWorklistHtml([item({ owner: OWNER, d: "prana", relays: [], cloneUrl: 'https://github.com/a"x/r.git', claimSkeleton: null })]);
+    const td = html.match(/<td class="clone"[^>]*>([\s\S]*?)<\/td>/)?.[1] ?? "";
+    expect(td).toContain("&quot;");   // the quote is escaped in the chip attributes
+    expect(td).not.toContain('a"x');  // the raw quote never appears unescaped
+    expect(td).not.toContain("href"); // still a copy chip, not a link
+  });
 });
