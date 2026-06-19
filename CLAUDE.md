@@ -162,3 +162,12 @@ harmless.
      surface it: `renderMultiRepoWorklist` prints a `! N repo(s) unreachable` footer,
      `renderWorklistHtml` a `role="alert"` banner above the table (label + error escaped).
      Plan + follow-up: `docs/superpowers/plans/2026-06-18-fetch-resilience.md`.
+   - DONE: web UI refresh + clone remotes (specs/plans under `docs/superpowers/`,
+     2026-06-18). The table is now full-width (1200px), has **sortable** `repo`/`size`/`claim`/
+     `subject` headers (size sorts S→M→L), a sticky header + live "showing N of M", a copy-id
+     button, and a responsive <640px stacked layout. Issue/repo links now point to
+     **gitworkshop.dev** (`gitworkshop.dev/<npub>/<relay-host>/<d>[/issues/<nevent>]`, built by
+     `gitworkshopRepoUrl`/`ngitCloneUrl` over a shared `repoCoordPath`); njump dropped. The
+     clone cell shows two copy chips — `ngit` (`git clone nostr://…`, the contribution-aligned
+     path) + the conventional **mirror** (`pickMirrorClone` skips grasp servers, which embed the
+     owner npub). All untrusted strings stay `escapeHtml`'d; clone chips are buttons, never `href`s.

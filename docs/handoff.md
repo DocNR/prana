@@ -1,81 +1,50 @@
-# Handoff — fetch layer live verification
-_Last updated: 2026-06-18 (later) — fetch resilience + unreachable-repo row_
+# Handoff — PRana session state + forward notes
+_Last updated: 2026-06-18 22:15 EST — web UI refresh + clone remotes shipped_
 
-## This session (2026-06-18, later) — fetch resilience landed; worklist no longer drops repos
-- **Transient drop fixed** (merge `28a466a`, ngit issue `122478d0`): one warm `SimplePool`
-  reused per registry run (`poolQuery`), a generous `maxWait`, and a one-shot retry in
-  `discoverAnnouncement` — a slow relay's late answer no longer makes a repo vanish.
-- **Genuinely-unreachable repo surfaced** (branch `feat/unreachable-repo-row`):
-  `fetchRegistryInputs` now returns `{ inputs, unreachable }`; a persistently-failing ref
-  becomes an `UnreachableRepo {ref, error}` marker instead of being silently dropped.
-  `renderMultiRepoWorklist` prints a `! N repo(s) unreachable` footer; `renderWorklistHtml`
-  renders a `role="alert"` banner above the table (label + error escaped).
-  `buildMultiRepoWorklist`, the folds, and `buildClaimEvent` are unchanged.
-- Base is now **144 passing** (`npm run typecheck && npm test`), not the 24 quoted below.
-- Plan + follow-up notes: `docs/superpowers/plans/2026-06-18-fetch-resilience.md`.
-- Still open / unchanged by this work: the live-verification steps and euc Phase 2 below.
+## This session (2026-06-18, evening) — web UI refresh + clone remotes (both merged + pushed)
+- **Web worklist UI refresh** (merged `main`, pushed): page widened 960→1200px (deadspace
+  fixed); `repo`/`size`/`claim`/`subject` headers sortable (size sorts S→M→L); sticky header
+  + live "showing N of M"; copy-id button; responsive stacked layout <640px; issue/repo links
+  now go to **gitworkshop.dev** (njump dropped). Spec/plan under `docs/superpowers/`.
+- **Clone remotes** (merged `main`, pushed): the clone cell now shows two click-to-copy chips —
+  `⧉ ngit` (`git clone nostr://<npub>/<relay-host>/<d>`, the contribution-aligned path) and
+  `⧉ <host>` (the conventional mirror, github/codeberg). New: `ngitCloneUrl` + shared
+  `repoCoordPath` (webui.ts), `pickMirrorClone` (registry.ts — first http(s) clone URL not
+  embedding `/npub1`, i.e. skips grasp servers). Spec/plan under `docs/superpowers/`.
+- Both went through brainstorm→spec→plan→subagent-driven TDD, a holistic **security review**
+  ("safe to merge", no XSS — all URL sinks `escapeHtml`'d, builders only emit gitworkshop/`nostr://`),
+  and a **live check** against real relays (2 repos, links match the real gitworkshop/nostr URLs).
+- Base is now **170 passing** (`npm run typecheck && npx vitest run`).
 
-## Earlier session (2026-06-18, ~09:30) — tooling only, no prana code changed
-- Created a **global** Claude Code skill for `ngit` at `~/.claude/skills/ngit/`
-  (SKILL.md + `references/commands.md`), modeled on the `nak` skill. It's the front
-  door for NIP-34 git-over-nostr work and makes the **ngit-vs-nak** boundary explicit
-  (collaboration verb → ngit; low-level event/relay/encoding → nak). See memory
-  `ngit-skill.md`. Useful for the live-verification steps below (they lean on `nak`/ngit).
-- Validated with skill-creator + ran the description trigger-optimizer (kept the original
-  description; eval artifacts in `~/.claude/skills/ngit-workspace/`).
-- **Prana repo untouched**: working tree clean, base still green (24 passing). All scope
-  below is unchanged and still open.
+## Next session priority — CVM (ContextVM) front door, for gzuuus's review
+The substrate is done: resolver + fetch gate, complexity, worklist, claim fold (read +
+write), and a polished read-only web UI. The remaining roadmap-#2/#5 gap is the **CVM
+front door** (see `docs/contextvm-fit.md`, status adopt-ready):
 
-## Where things are
+1. **Write a CVM interface spec** (highest leverage): the exact MCP tool definitions —
+   `list_open_issues` / `claim` / `release` / `report_status` — mapped to the existing pure
+   functions (`buildMultiRepoWorklist`, `buildClaimEvent`, `resolveClaim`), plus the
+   signing/auth model (agent signs each kind-25910 call with its own Nostr key; the claim
+   *event* stays the source of truth, non-custodial). This makes gzuuus's job wiring, not design.
+2. **Prototype a read-only `list_open_issues` gateway** with `@contextvm/sdk`
+   (`NostrServerTransport`/`Gateway`) wrapping the worklist as an MCP server over Nostr — a
+   cheap proof of fit. Reuses the same `nostr-tools`/signer/relay primitives already in use.
+3. Don't gate on NIP #2246 being merged (NIPs merge after they work in the wild).
 
-- Offline base is green: `npm run typecheck && npm test` → 24 passing.
-- The fetch layer (`src/fetch.ts`) and shared parsing (`src/nip34.ts`) are built and
-  unit-tested with an injected verifier/query (no network). It is the
-  signature-verification gate in front of the resolver.
-- What has NOT happened yet: running it against live relays, and resolving finding #4
-  on real data. That needs a machine with `nak`, `jq`, and Nostr keys.
+`gzuuus` authored `dvmcp` (the earlier MCP-over-Nostr bridge), so he's the domain expert —
+the prep above is about giving him a clean, legible target.
 
-## What the local session should do
+## Still open (lower priority, pre-existing)
+- **Finding #4 (default-Open trap):** on live data, confirm closures are tracked via kinds
+  1630–1633 vs some other mechanism (patch merged / nothing). Poke with `nak`; if resolved
+  counts look implausibly low, dig in.
+- **Phase 2 — live euc-group discovery:** the resolver SURFACES `forkSignal` when given
+  `forkOwners`, but discovering siblings live is unbuilt — in production `fetchRepo` passes no
+  siblings so `forkSignal` is always null (exercised only by `test/realFixture.test.ts`). Build
+  `discoverSiblings(announcement, relays, query)` keyed on the repo `euc` (`["r","<euc>","euc"]`).
+  Verify live first whether relays index `r` (`nak req -k 30617 -t r=<euc> wss://relay.ngit.dev`);
+  if not, fall back to the curated registry (roadmap #4) as the sibling source.
 
-1. `npm run typecheck && npm test` — confirm 24 passing.
-2. Capture a snapshot: `zsh fetch.sh` (writes repo/issues/statuses.ndjson for ngit).
-3. Cross-check old vs new over the SAME snapshot — counts should agree:
-   - `npm run analyze repo.ndjson issues.ndjson statuses.ndjson`
-   - `npm run fetch file repo.ndjson issues.ndjson statuses.ndjson`
-4. Run the live path (needs real relays):
-   `npm run fetch live a008def15796fba9a0d6fab04e8fd57089285d9fd505da5a83fe8aad57a3564d ngit wss://relay.ngit.dev wss://relay.damus.io`
-   Confirm it discovers the announcement, fetches issues by coord then statuses by
-   issue id, and that resolved counts match step 3. Watch the "dropped (bad sig)"
-   line — that's the security gate; report anything it drops.
-5. Finding #4 (default-Open trap): on real data, are closures tracked via kind
-   1630-1633, or is "resolved" happening some other way (patch merged, or nothing)?
-   Use `nak` to poke. If resolved counts look implausibly low, dig in and report why.
-6. If the snapshot is a good grounding fixture, propose committing a trimmed version
-   under `test/` so future offline work has real event shapes.
-
-Report what matched, what didn't, and anything surprising. Don't push without an OK.
-
-## After verification (next slice)
-
-Claim primitive (roadmap #2), designed **CVM-aware** — see `docs/contextvm-fit.md`.
-Shape claim/release/status so they can ride MCP-over-Nostr later without betting the
-core on the unmerged CVM NIP (#2246).
-
-## Next: Phase 2 — live euc-group discovery
-
-Phase 1 (branch `euc-group-fork-signal`) landed: the resolver SURFACES `forkSignal`
-when given `forkOwners` (sibling 30617 owners, owners-only by design), proven by
-`test/realFixture.test.ts` against the real `a34b99f` close. What is NOT done:
-discovering those siblings live — so in production `fetchRepo`/`fetch live` pass no
-siblings and `forkSignal` is always null. The mechanism is exercised only by tests.
-
-Build `discoverSiblings(announcement, relays, query)` that, given a repo's `euc`
-(`repoEuc()`), finds other 30617 announcements sharing it and returns
-`{ owner, coord }[]` (excluding self), then pass them to `fetchRepo({ forkOwners })`.
-
-Open question to verify live (mirror how `discoverAnnouncement` was verified): do
-relays index the `euc` so a server-side filter works, or must siblings be discovered
-another way (a maintainers graph / the opt-in registry)? `30617` stores euc as
-`["r", "<euc>", "euc"]`; test whether `nak req -k 30617 -t r=<euc> wss://relay.ngit.dev`
-returns the group before committing to that path. If relays don't index `r`, fall
-back to the curated registry (roadmap #4) as the sibling source.
+## Optional polish (non-blocking, from reviews)
+- Scope the worklist `[data-copy]` click listener to `.clone-chip[data-copy]` (future-proofing).
+- Move sortable-header `aria-sort` from the `<button>` onto the `<th>` (a11y nicety).
