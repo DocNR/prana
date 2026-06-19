@@ -11,7 +11,7 @@
 ## Established trust model (3 layers)
 
 1. **Repo consent — gates the global directory.** Reading issues and opening PRs stay **permissionless** (public repos always allowed that). What requires consent is PRana **listing/promoting** a repo as an agent-contribution target. The signal: a tag on the repo's `30617` announcement (maintainer-owned, already fetched in `discoverAnnouncement`, updatable via `ngit repo edit`). Provisional convention; **propose upstream to DanConwayDev/gzuuus** as a NIP-34 addition.
-2. **Issue curation — optional, within an opted-in repo.** The maintainer may flag good agent tasks with an issue label (`help-wanted` / `agent-ok` via `ngit issue label`, maintainer-only). Present ⇒ refine/prioritize to those; absent ⇒ all correctly-open issues surface. This is the "vetted backlog" layer (CLAUDE.md roadmap #4's "maintainer-asserted labels as an optional later layer").
+2. **Issue eligibility (STRICT maintainer whitelist).** Within an opted-in repo, an issue is an agent target ONLY if a recognized maintainer (repo owner plus the announcement's `maintainers`) has labeled it `agent-ok`, no matter who opened the issue. Mechanism: you cannot edit someone else's nostr event, so the label is a separate maintainer-signed event that references the issue by id (the same shape as the 1630 to 1633 status events), which is exactly why a maintainer can whitelist an issue a non-maintainer submitted (`ngit issue label <id>` is gated "author or maintainer"). PRana resolves eligibility with the SAME fold the status resolver already runs: gather label events that reference the issue, keep only the maintainer-signed ones, look for `agent-ok`. Author / non-maintainer self-labels are ignored for eligibility. This doubles as the spam defense: a stranger cannot turn their own issue into an agent target by opening or self-labeling it; only a maintainer's pick counts.
 3. **Two worklist views.**
    - **Global / default:** opted-in repos only — consent gates discovery-by-strangers.
    - **Personal (signed-in via `window.nostr`):** the viewer's NIP-51 followed repos, shown **regardless of opt-in** — they self-selected, and reading is permissionless. Claiming stays permissionless contributor-coordination (`isAdmissibleClaim` is unchanged — it only blocks the far-future "parking" attack, not who may claim).
@@ -28,7 +28,7 @@ Decision deferred to the (b) sub-spec; flagged here because it's a real shift, n
 
 ## Decomposition (three sub-projects, sequenced)
 
-- **(c) Consent / eligibility** — read the `30617` opt-in tag; gate the global directory to opted-in repos; optionally read maintainer issue labels to refine. *Smallest, foundational, most review-relevant.* **Build first.** Use a provisional tag and flag the convention as pending upstream blessing, so building doesn't block on gzuuus and is cheap to adjust.
+- **(c) Consent / eligibility** — read the `30617` opt-in tag and gate the global directory to opted-in repos; then STRICTLY gate eligible issues to those a recognized maintainer has labeled `agent-ok` (resolved via the status-fold, ignoring non-maintainer labels). *Smallest, foundational, most review-relevant.* **Build first.** Use a provisional tag and flag the convention as pending upstream blessing, so building doesn't block on gzuuus and is cheap to adjust.
 - **(b) Personal followed-repos view** — auth the viewer (reuse `window.nostr`), read their NIP-51 repo-follow list, build a worklist scoped to those coords, add a global/personal toggle. *Larger — the client-driven / per-viewer architecture change above.*
 - **(a) Fetch scaling** — bounded concurrency across per-repo discover/issues/statuses/claim queries + caching/incremental refresh, without regressing the resilience guarantees (one warm pool, `discoverAnnouncement` retry, no dropped repos). *Pure perf; do when either view grows.*
 
@@ -38,7 +38,7 @@ Each is independently shippable and gets its own `spec → plan` cycle; this doc
 
 - **The `30617` consent tag shape/name** — provisional (e.g. `["t","agent-contributions"]` vs a dedicated key). Needs DanConwayDev/gzuuus input to standardize; PRana can read a provisional tag meanwhile.
 - **What NIP-51 list means "following a repo"** — gitworkshop has a repo follow/bookmark concept; verify the exact kind/list (e.g. a `30000`/`30003`-style list of `30617` `a`-coords, or a gitworkshop-specific kind) with `nak` before building (b), the way `discoverAnnouncement`'s relay filter was verified live.
-- **Issue-label vocabulary** — settle on `help-wanted` vs `agent-ok` (and whether to honor both); confirm `ngit issue label` writes a `t` tag the resolver/worklist can read.
+- **What `ngit issue label` actually emits** — the eligibility rule is decided (STRICT maintainer `agent-ok` whitelist, see layer 2). The one mechanical unknown: confirm with `nak` the exact event kind + tag `ngit issue label` publishes (a separate maintainer-signed event referencing the issue), so PRana reads the maintainer's label correctly.
 
 ## Out of scope
 
