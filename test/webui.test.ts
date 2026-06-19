@@ -308,15 +308,45 @@ describe("renderWorklistHtml — claim controls", () => {
     expect(tbody).not.toMatch(/claim-btn/);
   });
 
-  it("clone: https → href, nostr → text, javascript → dropped", () => {
-    expect(renderWorklistHtml([item({ cloneUrl: "https://ok.example/r.git" })])).toMatch(/href="https:\/\/ok\.example\/r\.git"/);
-    expect(renderWorklistHtml([item({ cloneUrl: "nostr://npub1/r" })])).toContain("git clone nostr://npub1/r");
-    expect(renderWorklistHtml([item({ cloneUrl: "javascript:alert(1)" })])).not.toMatch(/javascript:alert/);
-  });
-
   it("</script> in a subject cannot break out (XSS via skeleton/text context)", () => {
     const html = renderWorklistHtml([item({ subject: `</script><img src=x onerror=alert(1)>` })]);
     expect(html).not.toContain(`</script><img`);
     expect(html).toContain("&lt;/script&gt;&lt;img");
+  });
+});
+
+describe("renderWorklistHtml — clone chips (Task 3)", () => {
+  const OWNER = "3129509e23d3a6125e1451a5912dbe01099e151726c4766b44e1ecb8c846f506";
+  const cloneTd = (html: string) => html.match(/<td class="clone"[^>]*>([\s\S]*?)<\/td>/)?.[1] ?? "";
+
+  it("renders an ngit chip and a host-labelled mirror chip", () => {
+    const html = renderWorklistHtml([item({ owner: OWNER, d: "prana", relays: ["wss://relay.ngit.dev"], cloneUrl: "https://github.com/DocNR/prana.git" })]);
+    expect(html).toMatch(/data-copy="git clone nostr:\/\/npub1[a-z0-9]+\/relay\.ngit\.dev\/prana"/);
+    expect(html).toMatch(/data-copy="git clone https:\/\/github\.com\/DocNR\/prana\.git"/);
+    expect(html).toContain(">ngit</button>");   // ngit chip label
+    expect(html).toContain(">github</button>"); // mirror chip label (host SLD)
+  });
+
+  it("shows only the ngit chip when there is no mirror", () => {
+    const html = renderWorklistHtml([item({ owner: OWNER, d: "prana", relays: ["wss://relay.ngit.dev"], cloneUrl: null })]);
+    expect(html).toMatch(/git clone nostr:/);
+    expect(html).not.toMatch(/git clone https:/);
+  });
+
+  it("shows only the mirror chip when relays are missing (no ngit URL)", () => {
+    const html = renderWorklistHtml([item({ owner: OWNER, d: "prana", relays: [], cloneUrl: "https://github.com/DocNR/prana.git", claimSkeleton: null })]);
+    expect(html).not.toMatch(/git clone nostr:/);
+    expect(html).toMatch(/git clone https:\/\/github\.com/);
+  });
+
+  it("empty clone cell when neither is buildable", () => {
+    const html = renderWorklistHtml([item({ owner: OWNER, d: "prana", relays: [], cloneUrl: null, claimSkeleton: null })]);
+    expect(cloneTd(html).trim()).toBe("");
+  });
+
+  it("ADVERSARIAL: a hostile mirror scheme is dropped and nothing breaks out", () => {
+    const html = renderWorklistHtml([item({ owner: OWNER, d: "prana", relays: ["wss://relay.ngit.dev"], cloneUrl: "javascript:alert(1)" })]);
+    expect(html).not.toContain("javascript:alert");
+    expect((cloneTd(html).match(/clone-chip/g) ?? []).length).toBe(1); // only the ngit chip
   });
 });

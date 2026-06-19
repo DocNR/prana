@@ -110,13 +110,32 @@ function controlCell(it: MultiRepoItem): string {
   return `<td class="act"><button class="claim-btn" data-action="claim"${hidden}>Claim</button></td>`;
 }
 
+/** Short label for a mirror host: the registrable name (github.com → "github",
+ *  codeberg.org → "codeberg"); falls back to the full hostname, then "git". */
+function mirrorLabel(url: string): string {
+  try {
+    const host = new URL(url).hostname;
+    const parts = host.split(".");
+    return parts.length >= 2 ? parts[parts.length - 2] : host;
+  } catch { return "git"; }
+}
+
+/** A click-to-copy clone chip. `command` is the full `git clone …` line; it is the
+ *  copy payload (data-copy), the hover tooltip (title), and never an href. */
+function cloneChip(label: string, command: string, extraClass = ""): string {
+  const cls = extraClass ? `clone-chip ${extraClass}` : "clone-chip";
+  return `<button class="${cls}" type="button" data-copy="${escapeHtml(command)}" aria-label="Copy ${escapeHtml(label)} clone command" title="${escapeHtml(command)}"><span class="cc-ic" aria-hidden="true">⧉</span>${escapeHtml(label)}</button>`;
+}
+
 function cloneCell(it: MultiRepoItem): string {
-  if (!it.cloneUrl) return `<td class="clone" data-label="clone"></td>`;
-  const c = safeClone(it.cloneUrl);
-  if (!c) return `<td class="clone" data-label="clone"></td>`;
-  if (c.kind === "href")
-    return `<td class="clone" data-label="clone"><a href="${escapeHtml(c.url)}" target="_blank" rel="noopener">clone</a></td>`;
-  return `<td class="clone" data-label="clone"><code>git clone ${escapeHtml(c.url)}</code></td>`;
+  const chips: string[] = [];
+  const ngit = ngitCloneUrl(it.owner, it.d, it.relays);
+  if (ngit) chips.push(cloneChip("ngit", `git clone ${ngit}`, "ng"));
+  if (it.cloneUrl) {
+    const c = safeClone(it.cloneUrl);
+    if (c && c.kind === "href") chips.push(cloneChip(mirrorLabel(c.url), `git clone ${c.url}`));
+  }
+  return `<td class="clone" data-label="clone">${chips.join("")}</td>`;
 }
 
 function row(it: MultiRepoItem): string {
@@ -199,6 +218,10 @@ export function renderWorklistHtml(items: MultiRepoItem[], unreachable: Unreacha
   .subject a { color: inherit; } .empty { opacity: .6; padding: 1.5rem; text-align: center; }
   .unreachable { border: 1px solid #b23b3b; background: #b23b3b1a; border-radius: 6px; padding: .6rem .9rem; margin: 0 0 1rem; }
   .unreachable strong { color: #b23b3b; } .unreachable ul { margin: .35rem 0 0; padding-left: 1.2rem; } .unreachable li { opacity: .85; }
+  .clone-chip { font: inherit; font-size: .8rem; display: inline-flex; align-items: center; gap: 3px; border: 0.5px solid #8884; border-radius: 6px; padding: 1px 7px; margin: 0 3px 0 0; cursor: pointer; background: transparent; color: inherit; }
+  .clone-chip:hover { border-color: #8888; }
+  .clone-chip .cc-ic { opacity: .6; }
+  .clone-chip.ng { border-color: #1d9e7577; color: #1d9e75; }
   @media (max-width: 640px) {
     body { padding: .75rem; }
     thead { display: none; }
@@ -352,6 +375,15 @@ ${body}
     navigator.clipboard.writeText(id).then(() => {
       const t = b.textContent; b.textContent = "✓";
       setTimeout(() => { b.textContent = t; }, 1000);
+    }).catch(() => {});
+  }));
+  document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", () => {
+    const cmd = b.dataset.copy;
+    if (!cmd || !navigator.clipboard) return;
+    const ic = b.querySelector(".cc-ic") || b;
+    navigator.clipboard.writeText(cmd).then(() => {
+      const t = ic.textContent; ic.textContent = "✓";
+      setTimeout(() => { ic.textContent = t; }, 1000);
     }).catch(() => {});
   }));
   document.querySelectorAll(".claim-btn").forEach((b) => b.addEventListener("click", () => act(b)));
