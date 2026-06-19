@@ -11,6 +11,7 @@ import {
   fetchRepoInput,
   fetchRegistryInputs,
   RepoInput,
+  pickMirrorClone,
 } from "../src/registry";
 import { ResolvedIssue, NostrEvent, KIND } from "../src/types";
 import { ClaimView } from "../src/worklist";
@@ -256,6 +257,24 @@ describe("fetchRegistryInputs — a genuinely unreachable repo surfaces, not sil
     expect(unreachable[0].ref.d).toBe("a"); // A is surfaced, NOT silently dropped
     expect(unreachable[0].ref.name).toBe("alpha");
     expect(unreachable[0].error).toMatch(/no 30617/); // carries the failure reason
+  });
+});
+
+describe("pickMirrorClone — conventional mirror vs grasp server", () => {
+  it("picks the conventional mirror, skipping grasp (npub-embedding) URLs", () => {
+    expect(pickMirrorClone(["https://github.com/o/r.git", "https://relay.ngit.dev/npub1abc/r.git"]))
+      .toBe("https://github.com/o/r.git");
+  });
+  it("skips a grasp URL even when it is listed first", () => {
+    expect(pickMirrorClone(["https://relay.ngit.dev/npub1abc/r.git", "https://codeberg.org/o/r.git"]))
+      .toBe("https://codeberg.org/o/r.git");
+  });
+  it("returns null when every clone URL is a grasp server", () => {
+    expect(pickMirrorClone(["https://relay.ngit.dev/npub1abc/r.git", "https://gitnostr.com/npub1abc/r.git"]))
+      .toBeNull();
+  });
+  it("returns null for an empty list", () => {
+    expect(pickMirrorClone([])).toBeNull();
   });
 });
 

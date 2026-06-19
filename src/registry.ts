@@ -166,6 +166,13 @@ export function renderMultiRepoWorklist(items: MultiRepoItem[], unreachable: Unr
   ].join("\n");
 }
 
+/** The conventional mirror clone URL (github/codeberg/…): the first http(s) clone
+ *  URL that isn't a grasp server. Grasp clone URLs embed the owner npub in their
+ *  path (…/npub1…/repo.git); conventional mirrors don't. null when there's none. */
+export function pickMirrorClone(cloneList: string[]): string | null {
+  return cloneList.find((u) => /^https?:\/\//.test(u) && !u.includes("/npub1")) ?? null;
+}
+
 /**
  * Live-fetch one registry entry into a RepoInput: discover its announcement, fetch
  * + resolve its issues, then gate-and-fold its claims (kind 31621 by `#d`). Uses the
@@ -198,7 +205,7 @@ export async function fetchRepoInput(
     claimFor = gatedClaimLookup(raw, openIds, now, verify ? { verify } : undefined);
   }
   const cloneList = repoClone(announcement);
-  const cloneUrl = cloneList.find((u) => u.startsWith("https://")) ?? cloneList[0] ?? null;
+  const cloneUrl = pickMirrorClone(cloneList);
   return { ref, resolved, claimFor, relays, cloneUrl };
 }
 
