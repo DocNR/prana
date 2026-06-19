@@ -1,5 +1,5 @@
 # Handoff — PRana session state + forward notes
-_Last updated: 2026-06-18 22:15 EST — web UI refresh + clone remotes shipped_
+_Last updated: 2026-06-18 22:40 EST — webui refresh + clone remotes shipped; trust-model design + 3 issues filed; paused for gzuuus_
 
 ## This session (2026-06-18, evening) — web UI refresh + clone remotes (both merged + pushed)
 - **Web worklist UI refresh** (merged `main`, pushed): page widened 960→1200px (deadspace
@@ -16,23 +16,28 @@ _Last updated: 2026-06-18 22:15 EST — web UI refresh + clone remotes shipped_
   and a **live check** against real relays (2 repos, links match the real gitworkshop/nostr URLs).
 - Base is now **170 passing** (`npm run typecheck && npx vitest run`).
 
-## Next session priority — CVM (ContextVM) front door, for gzuuus's review
-The substrate is done: resolver + fetch gate, complexity, worklist, claim fold (read +
-write), and a polished read-only web UI. The remaining roadmap-#2/#5 gap is the **CVM
-front door** (see `docs/contextvm-fit.md`, status adopt-ready):
+## State — paused for gzuuus's review (decision 2026-06-18 evening)
+The substrate is done (resolver + fetch gate, complexity, worklist, claim fold read+write,
+polished read-only web UI). This session also produced the **gzuuus-readiness deliverables**:
+- **Trust-model decision record:** `docs/superpowers/specs/2026-06-18-agent-eligibility-design.md`
+  — consent gates the **global directory** via a `30617` opt-in tag (reading/PRing stay
+  permissionless); optional issue-label curation (`help-wanted`/`agent-ok`); **two views**
+  (global opted-in + personal NIP-51 followed-repos). Decomposes into 3 sub-projects.
+- **Three ngit issues filed on prana:** `8ba97209` fetch concurrency+caching, `6e6aae22`
+  followed-repos personal worklist, `e6706fe9` repo consent model.
+- **CVM fit:** `docs/contextvm-fit.md` (adopt-ready). Future front door = expose the worklist
+  as an MCP server over Nostr (kind 25910): `list_open_issues`/`claim`/`release`/`report_status`
+  over the existing pure fns, agent signs each call, claim event stays source of truth.
 
-1. **Write a CVM interface spec** (highest leverage): the exact MCP tool definitions —
-   `list_open_issues` / `claim` / `release` / `report_status` — mapped to the existing pure
-   functions (`buildMultiRepoWorklist`, `buildClaimEvent`, `resolveClaim`), plus the
-   signing/auth model (agent signs each kind-25910 call with its own Nostr key; the claim
-   *event* stays the source of truth, non-custodial). This makes gzuuus's job wiring, not design.
-2. **Prototype a read-only `list_open_issues` gateway** with `@contextvm/sdk`
-   (`NostrServerTransport`/`Gateway`) wrapping the worklist as an MCP server over Nostr — a
-   cheap proof of fit. Reuses the same `nostr-tools`/signer/relay primitives already in use.
-3. Don't gate on NIP #2246 being merged (NIPs merge after they work in the wild).
+**Decision: pause building and wait for gzuuus** (authored `dvmcp`, the MCP-over-Nostr bridge).
+The piece that needs his + DanConwayDev's input is the **`30617` consent-tag convention** —
+building against a tag name that then changes is rework.
 
-`gzuuus` authored `dvmcp` (the earlier MCP-over-Nostr bridge), so he's the domain expert —
-the prep above is about giving him a clean, legible target.
+### When work resumes
+- **Gated on gzuuus:** (c) consent/eligibility gate, and the CVM front door itself (his lane).
+- **gzuuus-independent if continuing sooner:** (a) fetch scaling (pure perf, no convention dep);
+  (b) personal followed-repos view — first verify with `nak` what NIP-51 list/kind means
+  "following a repo" in gitworkshop, then the client-driven/per-viewer rendering change.
 
 ## Still open (lower priority, pre-existing)
 - **Finding #4 (default-Open trap):** on live data, confirm closures are tracked via kinds
