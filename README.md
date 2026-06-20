@@ -7,25 +7,47 @@ repos that surfaces their **correctly-open** issues by complexity, so contributo
 can pull an item and fix it. The name is **PR** + *piranha*: lots of small
 contributors descending on a shared backlog and stripping it clean.
 
-This repo currently contains the correctness core and the tooling to validate it
-against real on-relay data. See `CLAUDE.md` for full design context, the NIP-34
-reference, and the roadmap.
+## Why
+
+Plenty of developers have idle, use-it-or-lose-it capacity on an AI coding
+subscription, and plenty of open source projects have a backlog of small, well-scoped
+issues nobody has picked up. PRana routes the first at the second: a worklist that
+points a contributor (working on their own subscription, a person or their AI agent)
+at a vetted backlog item across many repos.
+
+This is **capacity routing, not token donation.** Subscription quota is not
+transferable between users, there is no escrow and no "donate my tokens" step. You
+spend your own capacity on a task you choose; PRana just makes the right task easy to
+find and keeps two people from doing the same one.
+
+## Status
+
+The full read path (resolver, signature-verification fetch gate, complexity scoring,
+cross-repo registry, worklist), the claim system (read fold + ingest gate + write CLI
++ web button), and a browsable web UI are all built and tested. See `CLAUDE.md` for
+full design context, the NIP-34 reference, and the roadmap, and `docs/event-kinds.md`
+for the one-page kinds reference.
 
 ## Layout
 
 ```
 src/
-  types.ts           NIP-34 event shapes + status kinds
-  statusResolver.ts  the core: which issues are actually open (pure, deterministic)
+  types.ts           NIP-34 event shapes + status/claim kinds
   nip34.ts           shared NIP-34 parsing (coord, authority, relays, mention-vs-root)
+  statusResolver.ts  the core: which issues are actually open (pure, deterministic)
   fetch.ts           live fetch + the signature-verification GATE -> resolver
-  analyze.ts         runs over real nak output; surfaces data problems for the directory
-test/
-  statusResolver.test.ts   edge cases that bite naive readers
-  fetch.test.ts            the verify gate + mention exclusion + live path (mocked)
-  fixtures.ts              NIP-34 event builders
+  complexity.ts      S/M/L scorer (pluggable; deterministic heuristic by default)
+  claimResolver.ts   claim fold: available / claimed / contended (pure)
+  claimFetch.ts      claim ingest gate (signature + anti-parking admissibility)
+  claimEvent.ts      buildClaimEvent: the unsigned kind-31621 claim template
+  claim.ts           write CLI: sign + publish a claim/release (npm run claim)
+  worklist.ts        single-repo contributor view (fetch -> resolve -> score -> claim)
+  registry.ts        cross-repo directory: merge many repos into one worklist
+  server.ts/webui.ts browsable, filterable web page (read-only; the client signs claims)
+  analyze.ts         runs over real nak output; surfaces data problems
+test/                unit tests for each of the above (resolver edge cases, the gate, the folds, render)
 fetch.sh             pull real ngit events with `nak` into ndjson
-docs/                design notes (e.g. contextvm-fit.md)
+docs/                design notes (event-kinds.md, claim-primitive.md, contextvm-fit.md, ...)
 CLAUDE.md            context for working with Claude Code
 ```
 
@@ -144,10 +166,12 @@ alpha    L    available  e88bde65  Refactor storage across all modules
 
 ## Web UI
 
-`src/server.ts` + `src/webui.ts` serve the registry worklist as a browsable,
-filterable page (filter by size / repo / available-only; each subject deep-links to
-the issue on njump). The render is pure and HTML-escaped — issue subjects are
-untrusted nostr content and must not be able to inject script.
+`src/server.ts` + `src/webui.ts` serve the registry worklist as a browsable page:
+filter by size / repo / available-only, sortable columns (size sorts S to L), a sticky
+header with a live "showing N of M" count, a copy-id button, and a responsive layout.
+Each subject and repo name deep-links to gitworkshop.dev. The render is pure and
+HTML-escaped, because issue subjects are untrusted nostr content and must not be able to
+inject script.
 
 ```bash
 npm run serve registry.json        # then open http://localhost:8787
@@ -159,8 +183,10 @@ browser, with a 60s cache so a refresh doesn't re-hammer relays.
 ### Claim from the web
 
 Each available row has a **Claim** button (and a **Release** button once you hold it),
-plus a per-repo **clone** link. The button is signed by *your own* signer — the server
-never touches a key and stays read-only. We load [`window.nostr.js`](https://github.com/fiatjaf/window.nostr.js)
+plus a clone cell with two copy chips: an **ngit** `nostr://` clone (the contribution
+path, so your PR lands back on nostr) and the conventional **mirror** (github/codeberg).
+The button is signed by *your own* signer; the server never touches a key and stays
+read-only. We load [`window.nostr.js`](https://github.com/fiatjaf/window.nostr.js)
 (WNJ), which exposes a NIP-07 `window.nostr` and, when no extension is present, offers a
 NIP-46 bunker/QR flow (e.g. Clave). On click, the browser stamps the time onto the
 server-built claim skeleton (`buildClaimEvent` is the single source of truth), calls
@@ -168,9 +194,9 @@ server-built claim skeleton (`buildClaimEvent` is the single source of truth), c
 **registry-trusted** relays; the row then flips optimistically once a relay confirms.
 
 Security: untrusted strings are escaped and JSON is embedded only in `data-*` attributes
-(never a `<script>`); clone URLs are scheme-checked via `new URL()` (`http(s)` link,
-`nostr:` text, everything else dropped); publish relays are parsed, `wss:`-only, and
-capped; WNJ is pinned with an SRI hash. See
+(never a `<script>`); clone chips are copy-to-clipboard buttons, never `href`s, and the
+gitworkshop links are built only from `npub`/`nevent` encodings plus an escaped host;
+publish relays are parsed, `wss:`-only, and capped; WNJ is pinned with an SRI hash. See
 `docs/superpowers/specs/2026-06-18-web-claim-button-design.md` (incl. the adversarial
 review) for the full threat model.
 
