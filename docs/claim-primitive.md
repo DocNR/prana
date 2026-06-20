@@ -1,9 +1,27 @@
 # Claim primitive — design note
 
-Status: **design only, not implemented.** The kind number below is provisional and
-must be reserved (NIPs repo) before any cross-client use. Don't write code off this
-until the live verification + finding #4 results are in — they may change the TTL and
-the auto-release rules.
+Status: **IMPLEMENTED.** The claim fold (`src/claimResolver.ts`), the ingest /
+admissibility gate (`src/claimFetch.ts`, `isAdmissibleClaim`), the write path
+(`src/claim.ts`, `buildClaimEvent`), and the web-UI claim/release button are all built
+and tested. This note is the original design rationale; the as-built reality differs in
+a few places (see "As built" below). The kind number `31621` is still **PROVISIONAL and
+unreserved** and must be reserved before cross-client use. One-page kinds overview:
+`docs/event-kinds.md`.
+
+## As built (where this note is now out of date)
+
+- **No `a` tag.** The shipped claim carries `d`, `e` (root), `expiration`, `status` only
+  (`buildClaimEvent`). The `["a", ...]` repo-coord tag in the provisional shape below was
+  dropped; the `e`-tag to the issue is enough, and the repo is reachable from the issue.
+- **TTL is settled:** default 3 days, hard max 14 days (`DEFAULT_TTL_SECONDS` /
+  `MAX_TTL_SECONDS`), not the "unsettled 48-72h" noted further down.
+- **Admissibility gate added:** ingest drops a claim whose `expiration` exceeds
+  `now + 14d` or whose `created_at` is future-dated (the anti-"parking" defense), on top
+  of the signature check.
+- **Contention policy chosen:** first-come canonical holder (the option proposed below),
+  implemented in the fold.
+- Still open: reserve the kind number, auto-release-on-resolution (currently implicit:
+  the directory stops showing claims on non-open issues), and maintainer override (deferred).
 
 ## The problem this solves
 
